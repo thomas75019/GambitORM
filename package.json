@@ -1,9 +1,12 @@
 {
   "name": "gambitorm",
   "version": "0.1.0",
-  "description": "A modern, type-safe ORM for Node.js",
+  "description": "A modern, type-safe ORM for Node.js with full TypeScript support, migrations, relationships, validation, and hooks",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "gambit": "./dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -12,7 +15,9 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build && npm test",
+    "version": "node scripts/version.js",
+    "postversion": "git push && git push --tags"
   },
   "keywords": [
     "orm",
@@ -20,13 +25,27 @@
     "sql",
     "typescript",
     "nodejs",
-    "query-builder"
+    "query-builder",
+    "mysql",
+    "postgresql",
+    "postgres",
+    "sqlite",
+    "migration",
+    "validation",
+    "relationships",
+    "transactions",
+    "hooks",
+    "type-safe"
   ],
-  "author": "",
-  "license": "MIT",
-  "bin": {
-    "gambit": "./dist/cli/index.js"
+  "author": {
+    "name": "GambitORM Contributors",
+    "url": "https://github.com/your-username/GambitORM"
   },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/your-username/GambitORM/issues"
+  },
+  "homepage": "https://github.com/your-username/GambitORM#readme",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/commander": "^2.12.0",
@@ -51,7 +70,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",

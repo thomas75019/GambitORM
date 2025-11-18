@@ -1,0 +1,59 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Test files
+tests/
+test/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Development files
+.eslintrc.json
+tsconfig.json
+.gitignore
+.editorconfig
+
+# CI/CD
+.github/
+
+# Documentation (keep README.md)
+docs/
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+PROJECT.md
+CHANGELOG.md
+
+# Examples
+examples/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies (already in node_modules)
+node_modules/
+
+# Build artifacts (keep dist/)
+*.map
+!dist/**/*.map
+

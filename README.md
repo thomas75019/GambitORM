@@ -1,5 +1,11 @@
 # GambitORM
 
+[![npm version](https://badge.fury.io/js/gambitorm.svg)](https://badge.fury.io/js/gambitorm)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.1+-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D16.0.0-green.svg)](https://nodejs.org/)
+[![Build Status](https://github.com/your-username/GambitORM/workflows/CI/badge.svg)](https://github.com/your-username/GambitORM/actions)
+
 A modern, type-safe ORM for Node.js built with TypeScript.
 
 ## Features
@@ -564,6 +570,131 @@ Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.m
 ## License
 
 MIT
+
+## Examples
+
+### Model with Relationships
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  name!: string;
+  
+  profile() {
+    return this.hasOne(Profile, { foreignKey: 'user_id' });
+  }
+  
+  posts() {
+    return this.hasMany(Post, { foreignKey: 'user_id' });
+  }
+}
+
+class Post extends Model {
+  static tableName = 'posts';
+  id!: number;
+  user_id!: number;
+  title!: string;
+  
+  user() {
+    return this.belongsTo(User, { foreignKey: 'user_id' });
+  }
+}
+
+// Usage
+const user = await User.findById(1, { include: ['profile', 'posts'] });
+```
+
+### Advanced Query
+
+```typescript
+const query = new QueryBuilder('users', connection);
+query
+  .select(['users.*', 'COUNT(orders.id) as order_count'])
+  .leftJoin('orders', { left: 'users.id', right: 'orders.user_id' })
+  .where('users.status', '=', 'active')
+  .whereIn('users.role', ['customer', 'premium'])
+  .whereNotNull('users.email')
+  .groupBy('users.id')
+  .having('COUNT(orders.id)', '>', 0)
+  .orderBy('order_count', 'DESC')
+  .limit(10);
+
+const results = await query.execute();
+```
+
+### Migration Example
+
+```typescript
+import { Migration } from 'gambitorm';
+
+export class CreateUsersTable extends Migration {
+  async up(): Promise<void> {
+    await this.schema('users')
+      .id()
+      .string('name')
+      .string('email', 255)
+      .unique()
+      .notNull()
+      .timestamp('created_at')
+      .timestamp('updated_at')
+      .create();
+  }
+
+  async down(): Promise<void> {
+    await this.schema('users').drop();
+  }
+
+  getName(): string {
+    return 'create_users_table';
+  }
+}
+```
+
+### Validation Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  static validationRules = {
+    name: [
+      new RequiredValidator('Name is required'),
+      new MinLengthValidator(3),
+    ],
+    email: [
+      new RequiredValidator(),
+      new EmailValidator('Invalid email'),
+    ],
+    age: [
+      new TypeValidator('number'),
+      new MinValidator(18),
+      new MaxValidator(120),
+    ],
+  };
+}
+```
+
+### Transaction Example
+
+```typescript
+// Automatic transaction
+await orm.transaction(async (tx) => {
+  const user = await User.create({ name: 'John', email: 'john@example.com' });
+  await Profile.create({ user_id: user.id, bio: 'Developer' });
+  // Automatically commits or rolls back on error
+});
+
+// Manual transaction
+const tx = await orm.beginTransaction();
+try {
+  await User.create({ name: 'John' });
+  await Profile.create({ user_id: 1 });
+  await tx.commit();
+} catch (error) {
+  await tx.rollback();
+  throw error;
+}
+```
 
 ## Support
 
