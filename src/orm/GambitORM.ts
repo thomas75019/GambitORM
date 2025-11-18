@@ -1,5 +1,6 @@
 import { DatabaseConfig } from '../types';
 import { Connection } from '../connection/Connection';
+import { Model } from './Model';
 
 /**
  * Main ORM class that manages database connections and models
@@ -18,6 +19,8 @@ export class GambitORM {
    */
   async connect(): Promise<void> {
     await this.connection.connect();
+    // Set the connection for all models
+    Model.setConnection(this.connection);
   }
 
   /**

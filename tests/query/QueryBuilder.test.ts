@@ -126,20 +126,58 @@ describe('QueryBuilder', () => {
   });
 
   describe('toSQL', () => {
-    it('should return empty string (not yet implemented)', () => {
+    it('should generate SELECT SQL query', () => {
       const builder = new QueryBuilder('users');
-      const sql = builder.toSQL();
+      const { sql, params } = builder.toSQL();
 
-      expect(sql).toBe('');
+      expect(sql).toBe('SELECT * FROM users');
+      expect(params).toEqual([]);
+    });
+
+    it('should generate SELECT with WHERE clause', () => {
+      const builder = new QueryBuilder('users');
+      builder.where('id', '=', 1);
+      const { sql, params } = builder.toSQL();
+
+      expect(sql).toBe('SELECT * FROM users WHERE id = ?');
+      expect(params).toEqual([1]);
+    });
+
+    it('should generate INSERT SQL query', () => {
+      const builder = new QueryBuilder('users');
+      builder.insert({ name: 'John', email: 'john@example.com' });
+      const { sql, params } = builder.toSQL();
+
+      expect(sql).toBe('INSERT INTO users (name, email) VALUES (?, ?)');
+      expect(params).toEqual(['John', 'john@example.com']);
+    });
+
+    it('should generate UPDATE SQL query', () => {
+      const builder = new QueryBuilder('users');
+      builder.update({ name: 'Jane' });
+      builder.where('id', '=', 1);
+      const { sql, params } = builder.toSQL();
+
+      expect(sql).toBe('UPDATE users SET name = ? WHERE id = ?');
+      expect(params).toEqual(['Jane', 1]);
+    });
+
+    it('should generate DELETE SQL query', () => {
+      const builder = new QueryBuilder('users');
+      builder.delete();
+      builder.where('id', '=', 1);
+      const { sql, params } = builder.toSQL();
+
+      expect(sql).toBe('DELETE FROM users WHERE id = ?');
+      expect(params).toEqual([1]);
     });
   });
 
   describe('execute', () => {
-    it('should return empty array (not yet implemented)', async () => {
+    it('should throw error when connection is not set', async () => {
       const builder = new QueryBuilder('users');
-      const result = await builder.execute();
-
-      expect(result).toEqual([]);
+      
+      await expect(builder.execute()).rejects.toThrow('Connection not set');
     });
   });
 });
