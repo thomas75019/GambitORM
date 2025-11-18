@@ -29,6 +29,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🕐 Automatic timestamps (created_at, updated_at)
 - 🗑️ Soft deletes support
 - ⚡ Quick helper methods (count, exists, pluck, first, last, increment, decrement, touch, fresh, isDirty, isClean)
+- 📦 Batch operations (bulkInsert, bulkUpdate, bulkDelete, bulkUpsert)
 
 ## Installation
 
@@ -841,6 +842,45 @@ if (user.isDirty('name')) {
 if (user.isClean()) {
   console.log('No changes made');
 }
+```
+
+### Batch Operations Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  name!: string;
+  email!: string;
+  status!: string;
+}
+
+// Bulk insert multiple records
+const users = await User.bulkInsert([
+  { name: 'John', email: 'john@example.com' },
+  { name: 'Jane', email: 'jane@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+]);
+
+// Bulk update multiple records
+const updated = await User.bulkUpdate(
+  { status: 'inactive' },
+  { lastLogin: new Date() }
+);
+console.log(`Updated ${updated} records`);
+
+// Bulk delete multiple records
+const deleted = await User.bulkDelete({ status: 'inactive' });
+console.log(`Deleted ${deleted} records`);
+
+// Bulk upsert (insert or update)
+const upserted = await User.bulkUpsert(
+  [
+    { name: 'John', email: 'john@example.com' }, // Insert if new
+    { id: 2, name: 'Jane Updated', email: 'jane@example.com' }, // Update if exists
+  ],
+  ['id', 'email'] // Unique keys to check
+);
 ```
 
 ### Transaction Example
