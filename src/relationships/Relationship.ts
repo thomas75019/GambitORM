@@ -1,7 +1,7 @@
 import { Model } from '../orm/Model';
 import { QueryBuilder } from '../query/QueryBuilder';
 
-export type RelationshipType = 'hasOne' | 'hasMany' | 'belongsTo';
+export type RelationshipType = 'hasOne' | 'hasMany' | 'belongsTo' | 'belongsToMany';
 
 export interface RelationshipConfig {
   model: new () => Model;

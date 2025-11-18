@@ -5,6 +5,7 @@ import { Connection } from '../connection/Connection';
 import { HasOne } from '../relationships/HasOne';
 import { HasMany } from '../relationships/HasMany';
 import { BelongsTo } from '../relationships/BelongsTo';
+import { BelongsToMany, BelongsToManyOptions } from '../relationships/BelongsToMany';
 import { Validator, ValidationEngine, ValidationError } from '../validation';
 import { HookManager, HookEvent, HookCallback } from '../hooks';
 import { ScopeQueryBuilder } from './ScopeQueryBuilder';
@@ -150,6 +151,25 @@ export abstract class Model {
    */
   belongsTo(relatedModel: new () => Model, foreignKey?: string, localKey?: string): BelongsTo {
     return new BelongsTo(this, relatedModel, foreignKey, localKey);
+  }
+
+  /**
+   * Define a belongsToMany relationship (many-to-many)
+   */
+  static belongsToMany<T extends Model>(
+    this: (new () => T) & { tableName: string },
+    relatedModel: new () => Model,
+    options: BelongsToManyOptions
+  ): BelongsToMany {
+    const instance = new this();
+    return new BelongsToMany(instance, relatedModel, options);
+  }
+
+  /**
+   * Instance method: belongsToMany relationship (many-to-many)
+   */
+  belongsToMany(relatedModel: new () => Model, options: BelongsToManyOptions): BelongsToMany {
+    return new BelongsToMany(this, relatedModel, options);
   }
 
   /**

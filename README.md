@@ -30,6 +30,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🗑️ Soft deletes support
 - ⚡ Quick helper methods (count, exists, pluck, first, last, increment, decrement, touch, fresh, isDirty, isClean)
 - 📦 Batch operations (bulkInsert, bulkUpdate, bulkDelete, bulkUpsert)
+- 🔗 Many-to-many relationships with pivot tables (belongsToMany, attach, detach, sync, toggle)
 
 ## Installation
 
@@ -881,6 +882,67 @@ const upserted = await User.bulkUpsert(
   ],
   ['id', 'email'] // Unique keys to check
 );
+```
+
+### Many-to-Many Relationships Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  name!: string;
+}
+
+class Role extends Model {
+  static tableName = 'roles';
+  id!: number;
+  name!: string;
+}
+
+// Define many-to-many relationship
+const user = await User.findById(1);
+const roles = user.belongsToMany(Role, {
+  pivotTable: 'user_roles',
+  foreignKey: 'user_id',
+  relatedKey: 'role_id',
+});
+
+// Load related roles
+const userRoles = await roles.load();
+
+// Attach a role
+await roles.attach(2); // Attach role with id 2
+await roles.attach(3, { assigned_at: new Date(), assigned_by: 1 }); // With pivot data
+
+// Attach multiple roles
+await roles.attachMany([2, 3, 4]);
+
+// Detach a role
+await roles.detach(2); // Detach specific role
+await roles.detach(); // Detach all roles
+
+// Sync roles (detach all and attach specified)
+await roles.sync([2, 3]); // Only roles 2 and 3 will be attached
+
+// Toggle a role (attach if not attached, detach if attached)
+const wasAttached = await roles.toggle(2);
+
+// Check if role is attached
+const hasRole = await roles.has(2);
+
+// Count related roles
+const roleCount = await roles.count();
+
+// Access pivot data
+const rolesWithPivot = user.belongsToMany(Role, {
+  pivotTable: 'user_roles',
+  foreignKey: 'user_id',
+  relatedKey: 'role_id',
+  withPivot: ['assigned_at', 'assigned_by'], // Include pivot fields
+});
+
+const rolesData = await rolesWithPivot.load();
+console.log(rolesData[0].pivot_assigned_at); // Access pivot data
 ```
 
 ### Transaction Example
