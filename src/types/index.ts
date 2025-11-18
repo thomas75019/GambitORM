@@ -38,3 +38,16 @@ export interface ModelInstance {
   [key: string]: any;
 }
 
+export interface RelationshipOptions {
+  eager?: boolean;
+  where?: Record<string, any>;
+  orderBy?: string | Array<{ column: string; direction: 'ASC' | 'DESC' }>;
+}
+
+export interface JoinConfig {
+  type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
+  table: string;
+  on: { left: string; right: string };
+  alias?: string;
+}
+

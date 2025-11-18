@@ -15,6 +15,9 @@ export class QueryBuilder {
   private insertData?: Record<string, any>;
   private updateData?: Record<string, any>;
   private queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' = 'SELECT';
+  private joins: Array<{ type: string; table: string; on: { left: string; right: string }; alias?: string }> = [];
+  private groupByFields: string[] = [];
+  private havingConditions: Array<{ field: string; operator: string; value: any }> = [];
 
   constructor(tableName: string, connection?: Connection) {
     this.tableName = tableName;
@@ -58,6 +61,52 @@ export class QueryBuilder {
    */
   offset(count: number): this {
     this.offsetValue = count;
+    return this;
+  }
+
+  /**
+   * Add a JOIN clause
+   */
+  join(table: string, on: { left: string; right: string }, type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL' = 'INNER', alias?: string): this {
+    this.joins.push({ type, table, on, alias });
+    return this;
+  }
+
+  /**
+   * Add a LEFT JOIN clause
+   */
+  leftJoin(table: string, on: { left: string; right: string }, alias?: string): this {
+    return this.join(table, on, 'LEFT', alias);
+  }
+
+  /**
+   * Add a RIGHT JOIN clause
+   */
+  rightJoin(table: string, on: { left: string; right: string }, alias?: string): this {
+    return this.join(table, on, 'RIGHT', alias);
+  }
+
+  /**
+   * Add a FULL JOIN clause
+   */
+  fullJoin(table: string, on: { left: string; right: string }, alias?: string): this {
+    return this.join(table, on, 'FULL', alias);
+  }
+
+  /**
+   * Add a GROUP BY clause
+   */
+  groupBy(fields: string | string[]): this {
+    const fieldsArray = Array.isArray(fields) ? fields : [fields];
+    this.groupByFields.push(...fieldsArray);
+    return this;
+  }
+
+  /**
+   * Add a HAVING clause
+   */
+  having(field: string, operator: string, value: any): this {
+    this.havingConditions.push({ field, operator, value });
     return this;
   }
 
@@ -124,12 +173,34 @@ export class QueryBuilder {
     const fields = this.selectFields.join(', ');
     let sql = `SELECT ${fields} FROM ${this.tableName}`;
 
+    // Add JOINs
+    for (const join of this.joins) {
+      const joinType = join.type === 'INNER' ? 'INNER JOIN' : 
+                      join.type === 'LEFT' ? 'LEFT JOIN' :
+                      join.type === 'RIGHT' ? 'RIGHT JOIN' :
+                      join.type === 'FULL' ? 'FULL OUTER JOIN' : 'INNER JOIN';
+      const tableName = join.alias ? `${join.table} AS ${join.alias}` : join.table;
+      sql += ` ${joinType} ${tableName} ON ${join.on.left} = ${join.on.right}`;
+    }
+
     if (this.whereConditions.length > 0) {
       const whereClauses = this.whereConditions.map((condition, index) => {
         params.push(condition.value);
         return `${condition.field} ${condition.operator} ?`;
       });
       sql += ` WHERE ${whereClauses.join(' AND ')}`;
+    }
+
+    if (this.groupByFields.length > 0) {
+      sql += ` GROUP BY ${this.groupByFields.join(', ')}`;
+    }
+
+    if (this.havingConditions.length > 0) {
+      const havingClauses = this.havingConditions.map(condition => {
+        params.push(condition.value);
+        return `${condition.field} ${condition.operator} ?`;
+      });
+      sql += ` HAVING ${havingClauses.join(' AND ')}`;
     }
 
     if (this.orderByClause.length > 0) {

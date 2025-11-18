@@ -7,6 +7,10 @@ export { Migration } from './migration/Migration';
 export { MigrationRunner } from './migration/MigrationRunner';
 export { SchemaBuilder } from './migration/SchemaBuilder';
 
+// Relationships
+export { HasOne, HasMany, BelongsTo } from './relationships';
+export { Relationship } from './relationships/Relationship';
+
 // Types
 export * from './types';
 
