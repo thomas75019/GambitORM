@@ -16,6 +16,8 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 💼 Transaction support
 - ✅ Model validation with custom validators
 - 🎣 Lifecycle hooks (beforeSave, afterSave, beforeDelete, etc.)
+- 🛠️ CLI tool for migration management
+- 🔍 Advanced query methods (whereIn, whereNull, whereBetween, subqueries, raw SQL)
 
 ## Installation
 
@@ -378,6 +380,171 @@ User.unhook(HookEvent.BEFORE_SAVE, myHook);
 
 // Clear all hooks for an event
 User.clearHooks(HookEvent.BEFORE_SAVE);
+```
+
+## CLI Tool
+
+GambitORM includes a CLI tool for managing migrations:
+
+### Installation
+
+After installing GambitORM, the `gambit` command is available:
+
+```bash
+npm install -g gambitorm
+# or use npx
+npx gambitorm
+```
+
+### Configuration
+
+Create a `.gambitorm.json` file in your project root:
+
+```json
+{
+  "host": "localhost",
+  "port": 3306,
+  "database": "mydb",
+  "user": "root",
+  "password": "password",
+  "dialect": "mysql"
+}
+```
+
+### Commands
+
+#### Run Migrations
+
+```bash
+gambit migrate
+```
+
+Runs all pending migrations.
+
+#### Rollback Migrations
+
+```bash
+# Rollback last batch
+gambit migrate:rollback
+
+# Rollback all migrations
+gambit migrate:rollback --all
+```
+
+#### Check Migration Status
+
+```bash
+gambit migrate:status
+```
+
+Shows which migrations have been executed and which are pending.
+
+#### Create Migration
+
+```bash
+gambit migrate:create create_users_table
+```
+
+Creates a new migration file in the `migrations` directory:
+
+```typescript
+import { Migration } from 'gambitorm';
+
+export class CreateUsersTable extends Migration {
+  async up(): Promise<void> {
+    await this.schema('users')
+      .id()
+      .string('name')
+      .string('email')
+      .timestamp('created_at')
+      .create();
+  }
+
+  async down(): Promise<void> {
+    await this.schema('users').drop();
+  }
+
+  getName(): string {
+    return 'create_users_table';
+  }
+}
+```
+
+### Custom Config Path
+
+```bash
+gambit migrate --config ./config/database.json
+```
+
+## Advanced QueryBuilder Features
+
+### Additional WHERE Methods
+
+```typescript
+import { QueryBuilder } from 'gambitorm';
+
+const query = new QueryBuilder('users', connection);
+
+// WHERE IN / NOT IN
+query.whereIn('id', [1, 2, 3]);
+query.whereNotIn('status', ['deleted', 'banned']);
+
+// WHERE NULL / NOT NULL
+query.whereNull('deleted_at');
+query.whereNotNull('email');
+
+// WHERE BETWEEN / NOT BETWEEN
+query.whereBetween('age', 18, 65);
+query.whereNotBetween('salary', 0, 50000);
+
+// WHERE LIKE / NOT LIKE
+query.whereLike('email', '%@gmail.com');
+query.whereNotLike('name', '%test%');
+
+// OR WHERE
+query.where('status', '=', 'active');
+query.orWhere('status', '=', 'pending');
+
+// Raw WHERE
+query.whereRaw('(age > ? OR salary > ?) AND status = ?', [18, 50000, 'active']);
+```
+
+### Subqueries
+
+```typescript
+// Create a subquery
+const subquery = QueryBuilder.subquery('orders', connection);
+subquery.select(['user_id']).where('total', '>', 1000);
+
+// Use in WHERE clause
+const query = new QueryBuilder('users', connection);
+query.whereSubquery('id', 'IN', subquery);
+
+// Results in: SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE total > ?)
+```
+
+### Aggregate Functions
+
+```typescript
+// Count
+query.count('*', 'total_users');
+query.count('id', 'user_count');
+
+// Sum, Average, Max, Min
+query.sum('total', 'total_revenue');
+query.avg('price', 'avg_price');
+query.max('amount', 'max_amount');
+query.min('amount', 'min_amount');
+```
+
+### Raw SQL Execution
+
+```typescript
+// Using ORM
+const result = await orm.raw('SELECT * FROM users WHERE id = ?', [1]);
+
+// Using QueryBuilder static method
+const result = await QueryBuilder.raw(connection, 'SELECT * FROM users WHERE id = ?', [1]);
 ```
 
 ## Documentation

@@ -1,9 +1,10 @@
-import { DatabaseConfig } from '../types';
+import { DatabaseConfig, QueryResult } from '../types';
 import { Connection } from '../connection/Connection';
 import { Model } from './Model';
 import { MigrationRunner } from '../migration/MigrationRunner';
 import { Migration } from '../migration/Migration';
 import { Transaction } from '../transaction/Transaction';
+import { QueryBuilder } from '../query/QueryBuilder';
 
 /**
  * Main ORM class that manages database connections and models
@@ -107,6 +108,13 @@ export class GambitORM {
    */
   async transaction<T>(callback: (transaction: Transaction) => Promise<T>): Promise<T> {
     return await Transaction.run(this.connection, callback);
+  }
+
+  /**
+   * Execute raw SQL query
+   */
+  async raw(sql: string, params?: any[]): Promise<QueryResult> {
+    return await QueryBuilder.raw(this.connection, sql, params);
   }
 }
 
