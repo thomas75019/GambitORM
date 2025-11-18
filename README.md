@@ -25,6 +25,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🛠️ CLI tool for migration management
 - 🔍 Advanced query methods (whereIn, whereNull, whereBetween, subqueries, raw SQL)
 - 🍃 MongoDB support with native operations
+- 🗑️ Soft deletes support
 
 ## Installation
 
@@ -675,6 +676,40 @@ class User extends Model {
     ],
   };
 }
+```
+
+### Soft Deletes Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  static softDeletes = true; // Enable soft deletes
+  static deletedAt = 'deleted_at'; // Optional: customize field name
+  
+  id!: number;
+  name!: string;
+  email!: string;
+  deleted_at?: Date | null;
+}
+
+// Soft delete (sets deleted_at instead of removing)
+const user = await User.findById(1);
+await user.delete(); // Sets deleted_at to current timestamp
+
+// Find all (excludes soft-deleted by default)
+const users = await User.findAll(); // Only non-deleted users
+
+// Include soft-deleted records
+const allUsers = await User.withTrashed().findAll();
+
+// Only soft-deleted records
+const deletedUsers = await User.onlyTrashed().findAll();
+
+// Restore a soft-deleted record
+await user.restore(); // Sets deleted_at to null
+
+// Permanently delete (force delete)
+await user.forceDelete(); // Actually removes from database
 ```
 
 ### Transaction Example
