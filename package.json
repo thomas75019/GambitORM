@@ -38,8 +38,9 @@
     "type-safe"
   ],
   "author": {
-    "name": "GambitORM Contributors",
-    "url": "https://github.com/your-username/GambitORM"
+    "name": "Thomas Larousse",
+    "url": "https://github.com/Thomas75019/GambitORM",
+    "email": "tlarousse3@gmail.com"
   },
   "license": "MIT",
   "bugs": {
