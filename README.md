@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.1+-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D16.0.0-green.svg)](https://nodejs.org/)
-[![Build Status](https://github.com/your-username/GambitORM/workflows/CI/badge.svg)](https://github.com/your-username/GambitORM/actions)
+[![Build Status](https://github.com/thomas75019/GambitORM/workflows/CI/badge.svg)](https://github.com/thomas75019/GambitORM/actions)
 
 A modern, type-safe ORM for Node.js built with TypeScript.
 
