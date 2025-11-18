@@ -12,6 +12,11 @@ export { Transaction } from './transaction/Transaction';
 export { HasOne, HasMany, BelongsTo } from './relationships';
 export { Relationship } from './relationships/Relationship';
 
+// Validation
+export { Validator, ValidationResult, ValidationError, BaseValidator } from './validation';
+export { ValidationEngine } from './validation/ValidationEngine';
+export * from './validation/validators';
+
 // Types
 export * from './types';
 

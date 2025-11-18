@@ -14,6 +14,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - ⚡ Eager loading
 - 🔀 Join queries
 - 💼 Transaction support
+- ✅ Model validation with custom validators
 
 ## Installation
 
@@ -184,6 +185,111 @@ try {
 } catch (error) {
   await connection.rollback();
   throw error;
+}
+```
+
+## Validation
+
+GambitORM supports model validation before save/update operations:
+
+### Basic Validation
+
+```typescript
+import { Model, RequiredValidator, EmailValidator, MinLengthValidator } from 'gambitorm';
+
+class User extends Model {
+  static tableName = 'users';
+  
+  // Define validation rules
+  static validationRules = {
+    name: [
+      new RequiredValidator('Name is required'),
+      new MinLengthValidator(3, 'Name must be at least 3 characters'),
+    ],
+    email: [
+      new RequiredValidator(),
+      new EmailValidator('Email must be valid'),
+    ],
+  };
+
+  id!: number;
+  name!: string;
+  email!: string;
+}
+
+// Validation runs automatically on create, save, and update
+try {
+  await User.create({ name: 'Jo', email: 'invalid' });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error('Validation errors:', error.errors);
+  }
+}
+```
+
+### Built-in Validators
+
+- `RequiredValidator` - Field is required
+- `EmailValidator` - Valid email format
+- `MinLengthValidator` / `MaxLengthValidator` - String length constraints
+- `MinValidator` / `MaxValidator` - Numeric value constraints
+- `TypeValidator` - Type checking (string, number, boolean, date, array, object)
+- `CustomValidator` - Custom validation function (supports async)
+
+### Custom Validators
+
+```typescript
+import { CustomValidator } from 'gambitorm';
+
+class Product extends Model {
+  static tableName = 'products';
+  
+  static validationRules = {
+    sku: [
+      new RequiredValidator(),
+      new CustomValidator(
+        (value) => /^[A-Z0-9-]+$/.test(value),
+        'SKU must contain only uppercase letters, numbers, and hyphens'
+      ),
+    ],
+    price: [
+      new CustomValidator(
+        async (value) => {
+          // Async validation example
+          const isValid = await checkPriceFromAPI(value);
+          return isValid;
+        },
+        'Price validation failed'
+      ),
+    ],
+  };
+}
+```
+
+### Skip Validation
+
+```typescript
+// Skip validation when needed
+await user.save({ skipValidation: true });
+await User.create(data, { skipValidation: true });
+await user.update(data, { skipValidation: true });
+```
+
+### Manual Validation
+
+```typescript
+const user = new User();
+user.name = 'John';
+user.email = 'john@example.com';
+
+try {
+  await user.validate();
+  console.log('Validation passed');
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error('Errors:', error.errors);
+    console.error('Field errors:', error.getFieldErrors('name'));
+  }
 }
 ```
 

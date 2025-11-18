@@ -4,6 +4,7 @@ import { Connection } from '../connection/Connection';
 import { HasOne } from '../relationships/HasOne';
 import { HasMany } from '../relationships/HasMany';
 import { BelongsTo } from '../relationships/BelongsTo';
+import { Validator, ValidationEngine, ValidationError } from '../validation';
 
 /**
  * Base Model class that all models should extend
@@ -12,6 +13,7 @@ export abstract class Model {
   static tableName: string;
   static connection: Connection | null = null;
   private static relationships: Map<string, { type: string; model: new () => Model; foreignKey?: string; localKey?: string }> = new Map();
+  static validationRules?: Record<string, Validator[]>;
   
   [key: string]: any;
 
@@ -237,9 +239,16 @@ export abstract class Model {
    * Create a new record
    */
   static async create<T extends Model>(
-    this: (new () => T) & { tableName: string },
-    attributes: ModelAttributes
+    this: (new () => T) & { tableName: string; validationRules?: Record<string, Validator[]> },
+    attributes: ModelAttributes,
+    options?: { skipValidation?: boolean }
   ): Promise<T> {
+    // Validate attributes before creating unless explicitly skipped
+    if (!options?.skipValidation && this.validationRules) {
+      const tempInstance = Model.hydrate(this, attributes);
+      await ValidationEngine.validate(tempInstance, this.validationRules);
+    }
+
     const connection = Model.getConnection();
     const query = new QueryBuilder(this.tableName, connection);
     query.insert(attributes);
@@ -259,9 +268,25 @@ export abstract class Model {
   }
 
   /**
+   * Validate the current instance
+   */
+  async validate(): Promise<void> {
+    const ModelClass = this.constructor as typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> };
+    
+    if (ModelClass.validationRules) {
+      await ValidationEngine.validate(this, ModelClass.validationRules);
+    }
+  }
+
+  /**
    * Save the current instance (insert or update)
    */
-  async save(): Promise<this> {
+  async save(options?: { skipValidation?: boolean }): Promise<this> {
+    // Validate before save unless explicitly skipped
+    if (!options?.skipValidation) {
+      await this.validate();
+    }
+
     const ModelClass = this.constructor as typeof Model & { tableName: string };
     const connection = Model.getConnection();
     const query = new QueryBuilder(ModelClass.tableName, connection);
@@ -292,9 +317,20 @@ export abstract class Model {
   /**
    * Update the current instance with new attributes
    */
-  async update(attributes: Partial<ModelAttributes>): Promise<this> {
+  async update(attributes: Partial<ModelAttributes>, options?: { skipValidation?: boolean }): Promise<this> {
     if (!this.id) {
       throw new Error('Cannot update a model instance without an id. Use save() to create a new record.');
+    }
+
+    // Validate updated attributes unless explicitly skipped
+    if (!options?.skipValidation) {
+      const ModelClass = this.constructor as typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> };
+      
+      if (ModelClass.validationRules) {
+        // Create a temporary object with updated values for validation
+        const tempModel = { ...this, ...attributes };
+        await ValidationEngine.validate(tempModel as Model, ModelClass.validationRules);
+      }
     }
 
     const ModelClass = this.constructor as typeof Model & { tableName: string };
