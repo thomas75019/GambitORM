@@ -27,6 +27,8 @@
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.10.0",
+    "@types/better-sqlite3": "^7.6.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.45.0",
@@ -34,7 +36,13 @@
     "ts-jest": "^29.1.0",
     "typescript": "^5.1.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "mysql2": "^3.6.0",
+    "pg": "^8.11.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.0.0"
+  },
   "files": [
     "dist",
     "README.md",

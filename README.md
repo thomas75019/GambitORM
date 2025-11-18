@@ -17,6 +17,20 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 npm install gambitorm
 ```
 
+### Optional: SQLite Support
+
+For SQLite support, you need to install `better-sqlite3` separately:
+
+```bash
+npm install better-sqlite3
+```
+
+**Note for Windows users:** `better-sqlite3` requires native compilation. You'll need:
+- Visual Studio Build Tools with "Desktop development with C++" workload
+- Windows SDK
+
+If you don't need SQLite support, you can skip this step. MySQL and PostgreSQL will work without it.
+
 ## Quick Start
 
 ```typescript

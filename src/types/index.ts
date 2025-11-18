@@ -3,17 +3,23 @@
  */
 
 export interface DatabaseConfig {
-  host: string;
-  port: number;
+  host?: string;
+  port?: number;
   database: string;
-  user: string;
-  password: string;
+  user?: string;
+  password?: string;
   dialect?: 'mysql' | 'postgres' | 'sqlite';
   pool?: {
     min?: number;
     max?: number;
     idle?: number;
   };
+}
+
+export interface QueryResult {
+  rows: any[];
+  rowCount?: number;
+  insertId?: number | string;
 }
 
 export interface QueryOptions {

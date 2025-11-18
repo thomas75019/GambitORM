@@ -1,8 +1,8 @@
 /**
- * Example test file
+ * Example test file - can be removed if not needed
  */
-describe('GambitORM', () => {
-  it('should be defined', () => {
+describe('Example', () => {
+  it('should pass', () => {
     expect(true).toBe(true);
   });
 });
