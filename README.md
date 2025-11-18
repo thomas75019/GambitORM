@@ -549,9 +549,25 @@ const result = await QueryBuilder.raw(connection, 'SELECT * FROM users WHERE id 
 
 ## Documentation
 
-Coming soon...
+- [API Documentation](./docs/API.md) - Complete API reference
+- [Usage Examples](./docs/USAGE.md) - Comprehensive usage examples
+- [Migration Guide](./docs/MIGRATION_GUIDE.md) - Migrating from other ORMs
+- [Best Practices](./docs/BEST_PRACTICES.md) - Best practices and guidelines
+- [Contributing](./CONTRIBUTING.md) - How to contribute
+- [Code of Conduct](./CODE_OF_CONDUCT.md) - Community guidelines
+- [Changelog](./CHANGELOG.md) - Version history
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) and [Code of Conduct](./CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ## License
 
 MIT
+
+## Support
+
+- 📖 [Documentation](./docs/)
+- 🐛 [Issue Tracker](https://github.com/your-username/GambitORM/issues)
+- 💬 [Discussions](https://github.com/your-username/GambitORM/discussions)
 
