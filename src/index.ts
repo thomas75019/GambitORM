@@ -17,6 +17,10 @@ export { Validator, ValidationResult, ValidationError, BaseValidator } from './v
 export { ValidationEngine } from './validation/ValidationEngine';
 export * from './validation/validators';
 
+// Hooks
+export { HookEvent, HookCallback, HookRegistration } from './hooks';
+export { HookManager } from './hooks/HookManager';
+
 // Types
 export * from './types';
 

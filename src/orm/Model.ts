@@ -5,6 +5,7 @@ import { HasOne } from '../relationships/HasOne';
 import { HasMany } from '../relationships/HasMany';
 import { BelongsTo } from '../relationships/BelongsTo';
 import { Validator, ValidationEngine, ValidationError } from '../validation';
+import { HookManager, HookEvent, HookCallback } from '../hooks';
 
 /**
  * Base Model class that all models should extend
@@ -14,8 +15,55 @@ export abstract class Model {
   static connection: Connection | null = null;
   private static relationships: Map<string, { type: string; model: new () => Model; foreignKey?: string; localKey?: string }> = new Map();
   static validationRules?: Record<string, Validator[]>;
+  private static hookManagers: Map<typeof Model, HookManager> = new Map();
   
   [key: string]: any;
+
+  /**
+   * Get or create hook manager for this model class
+   */
+  private static getHookManager(ModelClass: typeof Model): HookManager {
+    if (!this.hookManagers.has(ModelClass)) {
+      this.hookManagers.set(ModelClass, new HookManager());
+    }
+    return this.hookManagers.get(ModelClass)!;
+  }
+
+  /**
+   * Register a lifecycle hook
+   */
+  static hook<T extends Model>(
+    this: (new () => T) & typeof Model,
+    event: HookEvent,
+    callback: HookCallback<T>,
+    priority?: number
+  ): void {
+    const manager = this.getHookManager(this);
+    manager.register(event, callback as HookCallback, priority);
+  }
+
+  /**
+   * Unregister a lifecycle hook
+   */
+  static unhook<T extends Model>(
+    this: (new () => T) & typeof Model,
+    event: HookEvent,
+    callback: HookCallback<T>
+  ): void {
+    const manager = this.getHookManager(this);
+    manager.unregister(event, callback as HookCallback);
+  }
+
+  /**
+   * Clear all hooks for an event
+   */
+  static clearHooks<T extends Model>(
+    this: (new () => T) & typeof Model,
+    event: HookEvent
+  ): void {
+    const manager = this.getHookManager(this);
+    manager.clear(event);
+  }
 
   /**
    * Set the database connection for all models
@@ -239,14 +287,20 @@ export abstract class Model {
    * Create a new record
    */
   static async create<T extends Model>(
-    this: (new () => T) & { tableName: string; validationRules?: Record<string, Validator[]> },
+    this: (new () => T) & typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> },
     attributes: ModelAttributes,
     options?: { skipValidation?: boolean }
   ): Promise<T> {
+    const ModelClass = this as typeof Model;
+    const hookManager = Model.getHookManager(ModelClass);
+    const instance = Model.hydrate(this, attributes) as T;
+
+    // Execute beforeCreate hooks
+    await hookManager.execute(HookEvent.BEFORE_CREATE, instance);
+
     // Validate attributes before creating unless explicitly skipped
     if (!options?.skipValidation && this.validationRules) {
-      const tempInstance = Model.hydrate(this, attributes);
-      await ValidationEngine.validate(tempInstance, this.validationRules);
+      await ValidationEngine.validate(instance, this.validationRules);
     }
 
     const connection = Model.getConnection();
@@ -254,7 +308,11 @@ export abstract class Model {
     query.insert(attributes);
 
     const result = await query.execute();
-    const instance = Model.hydrate(this, { ...attributes, id: result.insertId }) as T;
+    (instance as any).id = result.insertId;
+
+    // Execute afterCreate hooks
+    await hookManager.execute(HookEvent.AFTER_CREATE, instance);
+
     return instance;
   }
 
@@ -271,23 +329,44 @@ export abstract class Model {
    * Validate the current instance
    */
   async validate(): Promise<void> {
-    const ModelClass = this.constructor as typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> };
+    const ModelClass = this.constructor as typeof Model;
+    const hookManager = Model.getHookManager(ModelClass);
+    const ModelClassWithRules = ModelClass as typeof Model & { validationRules?: Record<string, Validator[]> };
     
-    if (ModelClass.validationRules) {
-      await ValidationEngine.validate(this, ModelClass.validationRules);
+    // Execute beforeValidate hooks
+    await hookManager.execute(HookEvent.BEFORE_VALIDATE, this);
+    
+    if (ModelClassWithRules.validationRules) {
+      await ValidationEngine.validate(this, ModelClassWithRules.validationRules);
     }
+    
+    // Execute afterValidate hooks
+    await hookManager.execute(HookEvent.AFTER_VALIDATE, this);
   }
 
   /**
    * Save the current instance (insert or update)
    */
   async save(options?: { skipValidation?: boolean }): Promise<this> {
+    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const hookManager = Model.getHookManager(ModelClass);
+    const isNew = !this.id;
+
+    // Execute beforeSave hooks
+    await hookManager.execute(HookEvent.BEFORE_SAVE, this);
+
     // Validate before save unless explicitly skipped
     if (!options?.skipValidation) {
       await this.validate();
     }
 
-    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    // Execute beforeCreate or beforeUpdate hooks
+    if (isNew) {
+      await hookManager.execute(HookEvent.BEFORE_CREATE, this);
+    } else {
+      await hookManager.execute(HookEvent.BEFORE_UPDATE, this);
+    }
+
     const connection = Model.getConnection();
     const query = new QueryBuilder(ModelClass.tableName, connection);
 
@@ -304,12 +383,21 @@ export abstract class Model {
       query.update(attributes);
       query.where('id', '=', this.id);
       await query.execute();
+      
+      // Execute afterUpdate hooks
+      await hookManager.execute(HookEvent.AFTER_UPDATE, this);
     } else {
       // Insert new record
       query.insert(attributes);
       const result = await query.execute();
       this.id = result.insertId;
+      
+      // Execute afterCreate hooks
+      await hookManager.execute(HookEvent.AFTER_CREATE, this);
     }
+
+    // Execute afterSave hooks
+    await hookManager.execute(HookEvent.AFTER_SAVE, this);
 
     return this;
   }
@@ -322,18 +410,23 @@ export abstract class Model {
       throw new Error('Cannot update a model instance without an id. Use save() to create a new record.');
     }
 
+    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const hookManager = Model.getHookManager(ModelClass);
+
+    // Execute beforeUpdate hooks
+    await hookManager.execute(HookEvent.BEFORE_UPDATE, this);
+
     // Validate updated attributes unless explicitly skipped
     if (!options?.skipValidation) {
-      const ModelClass = this.constructor as typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> };
+      const ModelClassWithRules = ModelClass as typeof Model & { validationRules?: Record<string, Validator[]> };
       
-      if (ModelClass.validationRules) {
+      if (ModelClassWithRules.validationRules) {
         // Create a temporary object with updated values for validation
         const tempModel = { ...this, ...attributes };
-        await ValidationEngine.validate(tempModel as Model, ModelClass.validationRules);
+        await ValidationEngine.validate(tempModel as Model, ModelClassWithRules.validationRules);
       }
     }
 
-    const ModelClass = this.constructor as typeof Model & { tableName: string };
     const connection = Model.getConnection();
     const query = new QueryBuilder(ModelClass.tableName, connection);
 
@@ -344,6 +437,9 @@ export abstract class Model {
 
     // Update instance attributes
     Object.assign(this, attributes);
+
+    // Execute afterUpdate hooks
+    await hookManager.execute(HookEvent.AFTER_UPDATE, this);
 
     return this;
   }
@@ -357,6 +453,11 @@ export abstract class Model {
     }
 
     const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const hookManager = Model.getHookManager(ModelClass);
+
+    // Execute beforeDelete hooks
+    await hookManager.execute(HookEvent.BEFORE_DELETE, this);
+
     const connection = Model.getConnection();
     const query = new QueryBuilder(ModelClass.tableName, connection);
 
@@ -366,6 +467,9 @@ export abstract class Model {
     const result = await query.execute();
 
     if (result.rowCount && result.rowCount > 0) {
+      // Execute afterDelete hooks
+      await hookManager.execute(HookEvent.AFTER_DELETE, this);
+      
       // Clear the id to mark as deleted
       this.id = undefined;
       return true;

@@ -15,6 +15,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🔀 Join queries
 - 💼 Transaction support
 - ✅ Model validation with custom validators
+- 🎣 Lifecycle hooks (beforeSave, afterSave, beforeDelete, etc.)
 
 ## Installation
 
@@ -291,6 +292,92 @@ try {
     console.error('Field errors:', error.getFieldErrors('name'));
   }
 }
+```
+
+## Lifecycle Hooks
+
+GambitORM supports lifecycle hooks for models to execute code at specific points:
+
+### Available Hooks
+
+- `beforeSave` / `afterSave` - Before/after save (create or update)
+- `beforeCreate` / `afterCreate` - Before/after creating a new record
+- `beforeUpdate` / `afterUpdate` - Before/after updating a record
+- `beforeDelete` / `afterDelete` - Before/after deleting a record
+- `beforeValidate` / `afterValidate` - Before/after validation
+
+### Basic Usage
+
+```typescript
+import { Model, HookEvent } from 'gambitorm';
+
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  name!: string;
+  email!: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+// Register hooks
+User.hook(HookEvent.BEFORE_SAVE, async (user) => {
+  user.updated_at = new Date();
+  if (!user.id) {
+    user.created_at = new Date();
+  }
+});
+
+User.hook(HookEvent.AFTER_CREATE, async (user) => {
+  console.log(`User created: ${user.name}`);
+  // Send welcome email, etc.
+});
+
+User.hook(HookEvent.BEFORE_DELETE, async (user) => {
+  if (user.email === 'admin@example.com') {
+    throw new Error('Cannot delete admin user');
+  }
+});
+
+// Hooks are automatically executed
+const user = await User.create({ name: 'John', email: 'john@example.com' });
+await user.save();
+await user.delete();
+```
+
+### Hook Priority
+
+Hooks can have priorities (lower numbers run first):
+
+```typescript
+User.hook(HookEvent.BEFORE_SAVE, async (user) => {
+  console.log('Runs first');
+}, 10);
+
+User.hook(HookEvent.BEFORE_SAVE, async (user) => {
+  console.log('Runs second');
+}, 50);
+
+User.hook(HookEvent.BEFORE_SAVE, async (user) => {
+  console.log('Runs last (default priority 100)');
+});
+```
+
+### Managing Hooks
+
+```typescript
+const myHook = async (user: User) => {
+  console.log('My hook');
+};
+
+// Register
+User.hook(HookEvent.BEFORE_SAVE, myHook);
+
+// Unregister
+User.unhook(HookEvent.BEFORE_SAVE, myHook);
+
+// Clear all hooks for an event
+User.clearHooks(HookEvent.BEFORE_SAVE);
 ```
 
 ## Documentation
