@@ -126,7 +126,7 @@ export class MongoDBQueryBuilder {
   /**
    * Set INSERT operation
    */
-  insert(data: Record<string, any>): this {
+  insert(data: Record<string, any> | Record<string, any>[]): this {
     this.operation = 'insert';
     this.updateData = data as any;
     return this;
@@ -173,7 +173,13 @@ export class MongoDBQueryBuilder {
         operation.options = this.findOptions;
         break;
       case 'insert':
-        operation.document = this.updateData;
+        // Check if it's an array (bulk insert) or single document
+        if (Array.isArray(this.updateData)) {
+          operation.operation = 'insertMany';
+          operation.documents = this.updateData;
+        } else {
+          operation.document = this.updateData;
+        }
         break;
       case 'update':
         operation.filter = this.filter;

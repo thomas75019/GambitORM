@@ -12,7 +12,7 @@ export class QueryBuilder {
   private limitValue?: number;
   private offsetValue?: number;
   private connection?: Connection;
-  private insertData?: Record<string, any>;
+  private insertData?: Record<string, any> | Record<string, any>[];
   private updateData?: Record<string, any>;
   private queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' = 'SELECT';
   private joins: Array<{ type: string; table: string; on: { left: string; right: string }; alias?: string }> = [];
@@ -270,7 +270,7 @@ export class QueryBuilder {
   /**
    * Build INSERT query
    */
-  insert(data: Record<string, any>): this {
+  insert(data: Record<string, any> | Record<string, any>[]): this {
     this.queryType = 'INSERT';
     this.insertData = data;
     return this;
@@ -369,9 +369,32 @@ export class QueryBuilder {
       throw new Error('Insert data not provided');
     }
 
-    const columns = Object.keys(this.insertData);
+    // Handle bulk insert (array of records)
+    if (Array.isArray(this.insertData)) {
+      if (this.insertData.length === 0) {
+        throw new Error('Insert data array is empty');
+      }
+
+      // Get columns from first record
+      const columns = Object.keys(this.insertData[0]);
+      const valueRows: string[] = [];
+
+      for (const record of this.insertData) {
+        const values = columns.map(col => {
+          params.push(record[col]);
+          return '?';
+        });
+        valueRows.push(`(${values.join(', ')})`);
+      }
+
+      return `INSERT INTO ${this.tableName} (${columns.join(', ')}) VALUES ${valueRows.join(', ')}`;
+    }
+
+    // Handle single insert
+    const singleData = this.insertData as Record<string, any>;
+    const columns = Object.keys(singleData);
     const values = columns.map(col => {
-      params.push(this.insertData![col]);
+      params.push(singleData[col]);
       return '?';
     });
 

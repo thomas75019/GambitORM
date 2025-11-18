@@ -1154,5 +1154,270 @@ export abstract class Model {
   isClean(attribute?: string): boolean {
     return !this.isDirty(attribute);
   }
+
+  /**
+   * Bulk insert multiple records
+   */
+  static async bulkInsert<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    records: ModelAttributes[]
+  ): Promise<T[]> {
+    if (!records || records.length === 0) {
+      return [];
+    }
+
+    const ModelClass = this as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    };
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    
+    // Handle automatic timestamps if enabled
+    const processedRecords = records.map(record => {
+      const processed = { ...record };
+      if (ModelClass.timestamps) {
+        const createdAtField = ModelClass.createdAt || 'created_at';
+        const updatedAtField = ModelClass.updatedAt || 'updated_at';
+        const now = new Date();
+        
+        if (!processed[createdAtField]) {
+          processed[createdAtField] = now;
+        }
+        if (!processed[updatedAtField]) {
+          processed[updatedAtField] = now;
+        }
+      }
+      return processed;
+    });
+
+    if (isMongoDB) {
+      const query = new MongoDBQueryBuilder(ModelClass.tableName, connection);
+      const result = await query.insert(processedRecords).execute();
+      
+      // For MongoDB bulk insert, we need to fetch the inserted IDs
+      // The adapter returns the first insertId, but we need all of them
+      // For now, we'll create instances without IDs and let MongoDB handle them
+      const instances: T[] = [];
+      for (let i = 0; i < processedRecords.length; i++) {
+        // MongoDB will assign _id automatically, but we don't have them here
+        // So we'll create instances without IDs for now
+        const instance = Model.hydrate(this, { ...processedRecords[i] }) as T;
+        instances.push(instance);
+      }
+      
+      return instances;
+    } else {
+      // For SQL databases, use bulk insert
+      const query = new QueryBuilder(ModelClass.tableName, connection);
+      const result = await query.insert(processedRecords).execute();
+      
+      // Hydrate instances - for bulk insert, we may not get individual IDs
+      // So we'll create instances with the data and let the database assign IDs
+      const instances: T[] = [];
+      for (let i = 0; i < processedRecords.length; i++) {
+        // Try to get insert ID if available, otherwise use index-based ID
+        let insertId: number | string | undefined;
+        if (result.insertId) {
+          if (typeof result.insertId === 'number') {
+            insertId = result.insertId + i;
+          } else {
+            // For string IDs, we can't increment, so use undefined
+            insertId = i === 0 ? result.insertId : undefined;
+          }
+        }
+        const instance = Model.hydrate(this, { ...processedRecords[i], id: insertId }) as T;
+        instances.push(instance);
+      }
+      
+      return instances;
+    }
+  }
+
+  /**
+   * Bulk update multiple records matching conditions
+   */
+  static async bulkUpdate<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    conditions: Record<string, any>,
+    updates: Partial<ModelAttributes>
+  ): Promise<number> {
+    const ModelClass = this as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      updatedAt?: string;
+    };
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    
+    // Handle automatic timestamps if enabled
+    const updateData = { ...updates };
+    if (ModelClass.timestamps) {
+      const updatedAtField = ModelClass.updatedAt || 'updated_at';
+      if (!updateData[updatedAtField]) {
+        updateData[updatedAtField] = new Date();
+      }
+    }
+
+    // Apply global scopes
+    const globalScopesMap = (Model as any).globalScopes;
+    if (globalScopesMap) {
+      const globalScopes = globalScopesMap.get(ModelClass);
+      if (globalScopes) {
+        // Create a temporary query to apply scopes
+        const tempQuery = isMongoDB
+          ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+          : new QueryBuilder(ModelClass.tableName, connection);
+        for (const scope of globalScopes) {
+          scope(tempQuery);
+        }
+      }
+    }
+
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    // Apply conditions
+    for (const [field, value] of Object.entries(conditions)) {
+      query.where(field, '=', value);
+    }
+
+    // Apply soft delete filtering if enabled
+    const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
+    const deletedAt = (ModelClass as any).deletedAt as string | undefined;
+    if (softDeletes && !state.includeTrashed) {
+      const deletedAtField = deletedAt || 'deleted_at';
+      if (state.onlyTrashed) {
+        query.where(deletedAtField, '!=', null);
+      } else {
+        query.whereNull(deletedAtField);
+      }
+    }
+
+    if (isMongoDB) {
+      (query as MongoDBQueryBuilder).update(updateData);
+    } else {
+      (query as QueryBuilder).update(updateData);
+    }
+
+    const result = await query.execute();
+    return result.rowCount || 0;
+  }
+
+  /**
+   * Bulk delete multiple records matching conditions
+   */
+  static async bulkDelete<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    conditions: Record<string, any>
+  ): Promise<number> {
+    const ModelClass = this as typeof Model & { 
+      tableName: string;
+      softDeletes?: boolean;
+      deletedAt?: string;
+    };
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    // Apply global scopes
+    const globalScopesMap = (Model as any).globalScopes;
+    if (globalScopesMap) {
+      const globalScopes = globalScopesMap.get(ModelClass);
+      if (globalScopes) {
+        for (const scope of globalScopes) {
+          scope(query);
+        }
+      }
+    }
+
+    // Apply conditions
+    for (const [field, value] of Object.entries(conditions)) {
+      query.where(field, '=', value);
+    }
+
+    // Apply soft delete filtering if enabled
+    const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
+    const deletedAt = (ModelClass as any).deletedAt as string | undefined;
+    
+    // If soft deletes are enabled, perform soft delete instead of hard delete
+    if (softDeletes && !state.includeTrashed) {
+      const deletedAtField = deletedAt || 'deleted_at';
+      const now = new Date();
+      
+      if (isMongoDB) {
+        (query as MongoDBQueryBuilder).update({ [deletedAtField]: now });
+      } else {
+        (query as QueryBuilder).update({ [deletedAtField]: now });
+      }
+    } else {
+      query.delete();
+    }
+
+    const result = await query.execute();
+    return result.rowCount || 0;
+  }
+
+  /**
+   * Bulk upsert (insert or update) multiple records
+   */
+  static async bulkUpsert<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    records: ModelAttributes[],
+    uniqueKeys: string[] = ['id']
+  ): Promise<T[]> {
+    if (!records || records.length === 0) {
+      return [];
+    }
+
+    const ModelClass = this as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    };
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    
+    const instances: T[] = [];
+
+    for (const record of records) {
+      // Check if record exists based on unique keys
+      const whereConditions: Record<string, any> = {};
+      for (const key of uniqueKeys) {
+        if (record[key] !== undefined) {
+          whereConditions[key] = record[key];
+        }
+      }
+
+      let existing: T | null = null;
+      if (Object.keys(whereConditions).length > 0) {
+        existing = await (this as any).findOne(whereConditions);
+      }
+
+      if (existing) {
+        // Update existing record
+        await existing.update(record);
+        instances.push(existing);
+      } else {
+        // Insert new record
+        const newInstance = await (this as any).create(record);
+        instances.push(newInstance);
+      }
+    }
+
+    return instances;
+  }
 }
 
