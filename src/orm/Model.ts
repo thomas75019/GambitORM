@@ -261,12 +261,24 @@ export abstract class Model {
       query.offset(options.offset);
     }
 
+    // Apply soft delete filtering if enabled
+    const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
+    const deletedAt = (ModelClass as any).deletedAt as string | undefined;
+    if (softDeletes && !state.includeTrashed) {
+      const deletedAtField = deletedAt || 'deleted_at';
+      if (state.onlyTrashed) {
+        query.where(deletedAtField, '!=', null);
+      } else {
+        query.whereNull(deletedAtField);
+      }
+    }
+
     const result = await query.execute();
     const instances = result.rows.map(row => Model.hydrate(this, row)) as T[];
 
     // Reset soft delete modifiers after query
-    const ModelClassForAll = this as unknown as typeof Model;
-    Model.resetSoftDeleteModifiers(ModelClassForAll);
+    Model.resetSoftDeleteModifiers(ModelClass);
 
     // Eager load relationships if specified
     if (options?.include && options.include.length > 0) {
