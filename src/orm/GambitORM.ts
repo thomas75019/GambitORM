@@ -116,5 +116,60 @@ export class GambitORM {
   async raw(sql: string, params?: any[]): Promise<QueryResult> {
     return await QueryBuilder.raw(this.connection, sql, params);
   }
+
+  /**
+   * Enable query logging
+   */
+  enableQueryLog(options?: { logToConsole?: boolean; maxQueries?: number; slowQueryThreshold?: number }): void {
+    this.connection.enableQueryLog(options);
+  }
+
+  /**
+   * Disable query logging
+   */
+  disableQueryLog(): void {
+    this.connection.disableQueryLog();
+  }
+
+  /**
+   * Get query log
+   */
+  getQueryLog(): Array<{ sql: string; params?: any[]; executionTime: number; timestamp: Date; result?: { rowCount?: number; insertId?: number | string }; error?: Error }> {
+    return this.connection.getQueryLog();
+  }
+
+  /**
+   * Get slow queries
+   */
+  getSlowQueries(): Array<{ sql: string; params?: any[]; executionTime: number; timestamp: Date; result?: { rowCount?: number; insertId?: number | string }; error?: Error }> {
+    return this.connection.getSlowQueries();
+  }
+
+  /**
+   * Get the last query
+   */
+  getLastQuery(): { sql: string; params?: any[]; executionTime: number; timestamp: Date; result?: { rowCount?: number; insertId?: number | string }; error?: Error } | null {
+    return this.connection.getLastQuery();
+  }
+
+  /**
+   * Clear query log
+   */
+  clearQueryLog(): void {
+    this.connection.clearQueryLog();
+  }
+
+  /**
+   * Get query statistics
+   */
+  getQueryStats(): {
+    totalQueries: number;
+    totalExecutionTime: number;
+    averageExecutionTime: number;
+    slowQueries: number;
+    errors: number;
+  } {
+    return this.connection.getQueryStats();
+  }
 }
 

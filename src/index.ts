@@ -5,6 +5,7 @@ export { QueryBuilder } from './query/QueryBuilder';
 export { MongoDBQueryBuilder } from './query/MongoDBQueryBuilder';
 export { Connection } from './connection/Connection';
 export { MongoDBHelper } from './connection/adapters/MongoDBHelper';
+export { QueryLogger, LoggedQuery, QueryLogOptions } from './logging/QueryLogger';
 export { ScopeQueryBuilder } from './orm/ScopeQueryBuilder';
 export { Migration } from './migration/Migration';
 export { MigrationRunner } from './migration/MigrationRunner';

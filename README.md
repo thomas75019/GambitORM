@@ -31,6 +31,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - ⚡ Quick helper methods (count, exists, pluck, first, last, increment, decrement, touch, fresh, isDirty, isClean)
 - 📦 Batch operations (bulkInsert, bulkUpdate, bulkDelete, bulkUpsert)
 - 🔗 Many-to-many relationships with pivot tables (belongsToMany, attach, detach, sync, toggle)
+- 📊 Query logging and debugging (enableQueryLog, getQueryLog, getQueryStats, slow query tracking)
 
 ## Installation
 
@@ -943,6 +944,49 @@ const rolesWithPivot = user.belongsToMany(Role, {
 
 const rolesData = await rolesWithPivot.load();
 console.log(rolesData[0].pivot_assigned_at); // Access pivot data
+```
+
+### Query Logging Example
+
+```typescript
+// Enable query logging
+orm.enableQueryLog({
+  logToConsole: true,        // Log to console
+  maxQueries: 1000,          // Keep last 1000 queries
+  slowQueryThreshold: 1000,  // Log queries slower than 1 second
+});
+
+// Execute some queries
+await User.findAll();
+await User.findById(1);
+await User.create({ name: 'John' });
+
+// Get query log
+const queries = orm.getQueryLog();
+console.log(`Total queries: ${queries.length}`);
+
+// Get slow queries
+const slowQueries = orm.getSlowQueries();
+console.log(`Slow queries: ${slowQueries.length}`);
+
+// Get query statistics
+const stats = orm.getQueryStats();
+console.log(`Average execution time: ${stats.averageExecutionTime}ms`);
+console.log(`Total execution time: ${stats.totalExecutionTime}ms`);
+console.log(`Errors: ${stats.errors}`);
+
+// Get last query
+const lastQuery = orm.getLastQuery();
+if (lastQuery) {
+  console.log(`Last query: ${lastQuery.sql}`);
+  console.log(`Execution time: ${lastQuery.executionTime}ms`);
+}
+
+// Clear query log
+orm.clearQueryLog();
+
+// Disable query logging
+orm.disableQueryLog();
 ```
 
 ### Transaction Example

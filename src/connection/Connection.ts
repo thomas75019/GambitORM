@@ -4,6 +4,7 @@ import { MySQLAdapter } from './adapters/MySQLAdapter';
 import { PostgreSQLAdapter } from './adapters/PostgreSQLAdapter';
 import { SQLiteAdapter } from './adapters/SQLiteAdapter';
 import { MongoDBAdapter } from './adapters/MongoDBAdapter';
+import { QueryLogger, LoggedQuery, QueryLogOptions } from '../logging/QueryLogger';
 
 /**
  * Database connection manager
@@ -11,6 +12,7 @@ import { MongoDBAdapter } from './adapters/MongoDBAdapter';
 export class Connection {
   private config: DatabaseConfig;
   private adapter: BaseAdapter | null = null;
+  private queryLogger: QueryLogger = new QueryLogger();
 
   constructor(config: DatabaseConfig) {
     this.config = config;
@@ -80,7 +82,21 @@ export class Connection {
       throw new Error('Database connection is not established. Call connect() first.');
     }
 
-    return await this.adapter.query(sql, params);
+    const startTime = Date.now();
+    let result: QueryResult | undefined;
+    let error: Error | undefined;
+
+    try {
+      result = await this.adapter.query(sql, params);
+      const executionTime = Date.now() - startTime;
+      this.queryLogger.log(sql, params, executionTime, result);
+      return result;
+    } catch (err) {
+      error = err instanceof Error ? err : new Error(String(err));
+      const executionTime = Date.now() - startTime;
+      this.queryLogger.log(sql, params, executionTime, undefined, error);
+      throw error;
+    }
   }
 
   /**
@@ -156,6 +172,68 @@ export class Connection {
     }
 
     await this.adapter.rollback();
+  }
+
+  /**
+   * Enable query logging
+   */
+  enableQueryLog(options?: Partial<QueryLogOptions>): void {
+    this.queryLogger.enable(options);
+  }
+
+  /**
+   * Disable query logging
+   */
+  disableQueryLog(): void {
+    this.queryLogger.disable();
+  }
+
+  /**
+   * Get query log
+   */
+  getQueryLog(): LoggedQuery[] {
+    return this.queryLogger.getQueries();
+  }
+
+  /**
+   * Get slow queries
+   */
+  getSlowQueries(): LoggedQuery[] {
+    return this.queryLogger.getSlowQueries();
+  }
+
+  /**
+   * Get the last query
+   */
+  getLastQuery(): LoggedQuery | null {
+    return this.queryLogger.getLastQuery();
+  }
+
+  /**
+   * Clear query log
+   */
+  clearQueryLog(): void {
+    this.queryLogger.clear();
+  }
+
+  /**
+   * Get query statistics
+   */
+  getQueryStats(): {
+    totalQueries: number;
+    totalExecutionTime: number;
+    averageExecutionTime: number;
+    slowQueries: number;
+    errors: number;
+  } {
+    return this.queryLogger.getStats();
+  }
+
+  /**
+   * Get query logger instance
+   */
+  getQueryLogger(): QueryLogger {
+    return this.queryLogger;
   }
 }
 
