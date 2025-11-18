@@ -9,6 +9,10 @@ dist/
 build/
 *.tsbuildinfo
 
+# npm pack files
+*.tgz
+gambitorm-*.tgz
+
 # Testing
 coverage/
 .nyc_output/
