@@ -1,6 +1,6 @@
 {
   "name": "gambitorm",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A modern, type-safe ORM for Node.js with full TypeScript support, migrations, relationships, validation, and hooks",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
