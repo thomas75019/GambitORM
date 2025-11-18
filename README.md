@@ -25,6 +25,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🛠️ CLI tool for migration management
 - 🔍 Advanced query methods (whereIn, whereNull, whereBetween, subqueries, raw SQL)
 - 🍃 MongoDB support with native operations
+- 🎯 Model scopes (local and global scopes)
 - 🕐 Automatic timestamps (created_at, updated_at)
 - 🗑️ Soft deletes support
 
@@ -679,12 +680,67 @@ class User extends Model {
 }
 ```
 
+### Model Scopes Example
 ### Automatic Timestamps Example
 ### Soft Deletes Example
 
 ```typescript
 class User extends Model {
   static tableName = 'users';
+  id!: number;
+  name!: string;
+  status!: string;
+  age!: number;
+}
+
+// Define local scopes
+User.scope('active', (query) => {
+  query.where('status', '=', 'active');
+});
+
+User.scope('verified', (query) => {
+  query.where('verified', '=', true);
+});
+
+User.scope('adults', (query) => {
+  query.where('age', '>=', 18);
+});
+
+User.scope('byName', (query, name: string) => {
+  query.where('name', '=', name);
+});
+
+// Use scopes with query builder
+const activeUsers = await User.query()
+  .scope('active')
+  .get();
+
+// Chain multiple scopes
+const verifiedAdults = await User.query()
+  .scope('active')
+  .scope('verified')
+  .scope('adults')
+  .get();
+
+// Scopes with arguments
+const john = await User.query()
+  .scope('byName', 'John')
+  .first();
+
+// Combine scopes with other query methods
+const users = await User.query()
+  .scope('active')
+  .orderBy('name', 'ASC')
+  .limit(10)
+  .get();
+
+// Global scopes (always applied)
+User.addGlobalScope('published', (query) => {
+  query.where('published', '=', true);
+});
+
+// All queries automatically include global scopes
+const allUsers = await User.findAll(); // Includes published scope
   static timestamps = true; // Enable automatic timestamps
   static createdAt = 'created_at'; // Optional: customize field name
   static updatedAt = 'updated_at'; // Optional: customize field name
