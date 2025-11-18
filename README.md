@@ -32,6 +32,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 📦 Batch operations (bulkInsert, bulkUpdate, bulkDelete, bulkUpsert)
 - 🔗 Many-to-many relationships with pivot tables (belongsToMany, attach, detach, sync, toggle)
 - 📊 Query logging and debugging (enableQueryLog, getQueryLog, getQueryStats, slow query tracking)
+- ✅ Additional validators (UniqueValidator, ExistsValidator, RegexValidator, UrlValidator, DateValidator, ArrayValidator)
 
 ## Installation
 
@@ -987,6 +988,75 @@ orm.clearQueryLog();
 
 // Disable query logging
 orm.disableQueryLog();
+```
+
+### Additional Validators Example
+
+```typescript
+import { 
+  RequiredValidator, 
+  EmailValidator, 
+  UniqueValidator,
+  ExistsValidator,
+  RegexValidator,
+  UrlValidator,
+  DateValidator,
+  ArrayValidator
+} from 'gambitorm';
+
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  email!: string;
+  website?: string;
+  birthDate?: Date;
+  tags?: string[];
+  roleId?: number;
+  username!: string;
+
+  static validationRules = {
+    email: [
+      new RequiredValidator(),
+      new EmailValidator(),
+      new UniqueValidator('users', 'email'), // Check uniqueness
+    ],
+    username: [
+      new RequiredValidator(),
+      new RegexValidator(/^[a-zA-Z0-9_]+$/), // Alphanumeric and underscore only
+      new UniqueValidator('users', 'username', { ignoreId: this.id }), // Unique, ignore current record
+    ],
+    website: [
+      new UrlValidator({ protocols: ['http', 'https'] }), // Only HTTP/HTTPS
+    ],
+    birthDate: [
+      new DateValidator({
+        max: new Date(), // Cannot be in the future
+        min: new Date('1900-01-01'), // Cannot be before 1900
+      }),
+    ],
+    tags: [
+      new ArrayValidator({
+        min: 1,
+        max: 10,
+        itemType: 'string', // All items must be strings
+      }),
+    ],
+    roleId: [
+      new ExistsValidator('roles', 'id'), // Must exist in roles table
+    ],
+  };
+}
+
+// Usage
+const user = new User();
+user.email = 'john@example.com';
+user.username = 'john_doe';
+user.website = 'https://example.com';
+user.birthDate = new Date('1990-01-01');
+user.tags = ['developer', 'nodejs'];
+user.roleId = 1;
+
+await user.save(); // Validates before saving
 ```
 
 ### Transaction Example
