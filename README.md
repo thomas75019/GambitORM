@@ -25,6 +25,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🛠️ CLI tool for migration management
 - 🔍 Advanced query methods (whereIn, whereNull, whereBetween, subqueries, raw SQL)
 - 🍃 MongoDB support with native operations
+- 🕐 Automatic timestamps (created_at, updated_at)
 
 ## Installation
 
@@ -675,6 +676,39 @@ class User extends Model {
     ],
   };
 }
+```
+
+### Automatic Timestamps Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  static timestamps = true; // Enable automatic timestamps
+  static createdAt = 'created_at'; // Optional: customize field name
+  static updatedAt = 'updated_at'; // Optional: customize field name
+  
+  id!: number;
+  name!: string;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+// Create - automatically sets created_at and updated_at
+const user = await User.create({ name: 'John' });
+console.log(user.created_at); // Current timestamp
+console.log(user.updated_at); // Current timestamp
+
+// Save (new) - automatically sets both timestamps
+const newUser = new User();
+newUser.name = 'Jane';
+await newUser.save(); // Sets created_at and updated_at
+
+// Save (existing) - automatically updates updated_at
+user.name = 'John Updated';
+await user.save(); // Updates updated_at, keeps created_at unchanged
+
+// Update - automatically updates updated_at
+await user.update({ name: 'John Doe' }); // Updates updated_at
 ```
 
 ### Transaction Example

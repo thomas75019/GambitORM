@@ -17,6 +17,9 @@ export abstract class Model {
   private static relationships: Map<string, { type: string; model: new () => Model; foreignKey?: string; localKey?: string }> = new Map();
   static validationRules?: Record<string, Validator[]>;
   private static hookManagers: Map<typeof Model, HookManager> = new Map();
+  static timestamps: boolean = false;
+  static createdAt: string = 'created_at';
+  static updatedAt: string = 'updated_at';
   
   [key: string]: any;
 
@@ -297,13 +300,40 @@ export abstract class Model {
    * Create a new record
    */
   static async create<T extends Model>(
-    this: (new () => T) & typeof Model & { tableName: string; validationRules?: Record<string, Validator[]> },
+    this: (new () => T) & typeof Model & { 
+      tableName: string; 
+      validationRules?: Record<string, Validator[]>;
+      timestamps?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    },
     attributes: ModelAttributes,
     options?: { skipValidation?: boolean }
   ): Promise<T> {
-    const ModelClass = this as typeof Model;
+    const ModelClass = this as typeof Model & {
+      timestamps?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    };
     const hookManager = Model.getHookManager(ModelClass);
-    const instance = Model.hydrate(this, attributes) as T;
+    
+    // Handle automatic timestamps before creating instance
+    const createAttributes = { ...attributes };
+    if (ModelClass.timestamps) {
+      const createdAtField = ModelClass.createdAt || 'created_at';
+      const updatedAtField = ModelClass.updatedAt || 'updated_at';
+      const now = new Date();
+      
+      // Set timestamps if not provided
+      if (!createAttributes[createdAtField]) {
+        createAttributes[createdAtField] = now;
+      }
+      if (!createAttributes[updatedAtField]) {
+        createAttributes[updatedAtField] = now;
+      }
+    }
+    
+    const instance = Model.hydrate(this, createAttributes) as T;
 
     // Execute beforeCreate hooks
     await hookManager.execute(HookEvent.BEFORE_CREATE, instance);
@@ -314,8 +344,11 @@ export abstract class Model {
     }
 
     const connection = Model.getConnection();
-    const query = new QueryBuilder(this.tableName, connection);
-    query.insert(attributes);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
+    query.insert(createAttributes);
 
     const result = await query.execute();
     (instance as any).id = result.insertId;
@@ -358,7 +391,12 @@ export abstract class Model {
    * Save the current instance (insert or update)
    */
   async save(options?: { skipValidation?: boolean }): Promise<this> {
-    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const ModelClass = this.constructor as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    };
     const hookManager = Model.getHookManager(ModelClass);
     const isNew = !this.id;
 
@@ -388,6 +426,30 @@ export abstract class Model {
     for (const key in this) {
       if (this.hasOwnProperty(key) && typeof this[key] !== 'function') {
         attributes[key] = this[key];
+      }
+    }
+
+    // Handle automatic timestamps
+    if (ModelClass.timestamps) {
+      const createdAtField = ModelClass.createdAt || 'created_at';
+      const updatedAtField = ModelClass.updatedAt || 'updated_at';
+      const now = new Date();
+
+      if (isNew) {
+        // Set created_at on new records
+        if (!attributes[createdAtField]) {
+          attributes[createdAtField] = now;
+          (this as any)[createdAtField] = now;
+        }
+        // Set updated_at on new records
+        if (!attributes[updatedAtField]) {
+          attributes[updatedAtField] = now;
+          (this as any)[updatedAtField] = now;
+        }
+      } else {
+        // Update updated_at on existing records
+        attributes[updatedAtField] = now;
+        (this as any)[updatedAtField] = now;
       }
     }
 
@@ -428,7 +490,11 @@ export abstract class Model {
       throw new Error('Cannot update a model instance without an id. Use save() to create a new record.');
     }
 
-    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const ModelClass = this.constructor as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      updatedAt?: string;
+    };
     const hookManager = Model.getHookManager(ModelClass);
 
     // Execute beforeUpdate hooks
@@ -445,16 +511,34 @@ export abstract class Model {
       }
     }
 
-    const connection = Model.getConnection();
-    const query = new QueryBuilder(ModelClass.tableName, connection);
+    // Handle automatic timestamps
+    const updateAttributes = { ...attributes };
+    if (ModelClass.timestamps) {
+      const updatedAtField = ModelClass.updatedAt || 'updated_at';
+      // Only update updated_at if not explicitly provided
+      if (!updateAttributes[updatedAtField]) {
+        updateAttributes[updatedAtField] = new Date();
+      }
+    }
 
-    query.update(attributes);
-    query.where('id', '=', this.id);
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    if (isMongoDB) {
+      (query as MongoDBQueryBuilder).update(updateAttributes);
+      (query as MongoDBQueryBuilder).where('id', '=', this.id);
+    } else {
+      (query as QueryBuilder).update(updateAttributes);
+      (query as QueryBuilder).where('id', '=', this.id);
+    }
 
     await query.execute();
 
     // Update instance attributes
-    Object.assign(this, attributes);
+    Object.assign(this, updateAttributes);
 
     // Execute afterUpdate hooks
     await hookManager.execute(HookEvent.AFTER_UPDATE, this);
