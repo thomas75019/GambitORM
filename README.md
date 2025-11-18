@@ -27,6 +27,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🍃 MongoDB support with native operations
 - 🕐 Automatic timestamps (created_at, updated_at)
 - 🗑️ Soft deletes support
+- ⚡ Quick helper methods (count, exists, pluck, first, last, increment, decrement, touch, fresh, isDirty, isClean)
 
 ## Installation
 
@@ -738,6 +739,52 @@ await user.restore(); // Sets deleted_at to null
 
 // Permanently delete (force delete)
 await user.forceDelete(); // Actually removes from database
+```
+
+### Quick Helper Methods Example
+
+```typescript
+class User extends Model {
+  static tableName = 'users';
+  id!: number;
+  name!: string;
+  views!: number;
+}
+
+// Count records
+const totalUsers = await User.count();
+const activeUsers = await User.count({ status: 'active' });
+
+// Check existence
+const exists = await User.exists({ email: 'john@example.com' });
+
+// Pluck column values
+const names = await User.pluck('name');
+const topNames = await User.pluck('name', { limit: 10 });
+
+// Get first/last record
+const firstUser = await User.first();
+const lastUser = await User.last();
+
+// Increment/Decrement
+const user = await User.findById(1);
+await user.increment('views', 5); // Add 5
+await user.decrement('views', 2);  // Subtract 2
+
+// Touch timestamp
+await user.touch(); // Updates updated_at
+
+// Reload from database
+await user.fresh(); // Reloads all attributes
+
+// Check if modified
+if (user.isDirty('name')) {
+  console.log('Name has been changed');
+}
+
+if (user.isClean()) {
+  console.log('No changes made');
+}
 ```
 
 ### Transaction Example

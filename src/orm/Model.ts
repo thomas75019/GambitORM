@@ -424,6 +424,8 @@ export abstract class Model {
   private static hydrate<T extends Model>(ModelClass: new () => T, data: any): T {
     const instance = new ModelClass();
     Object.assign(instance, data);
+    // Store original attributes for dirty checking
+    (instance as any).originalAttributes = { ...data };
     return instance;
   }
 
@@ -538,6 +540,14 @@ export abstract class Model {
     // Execute afterSave hooks
     await hookManager.execute(HookEvent.AFTER_SAVE, this);
 
+    // Update original attributes after save
+    (this as any).originalAttributes = { ...this };
+    Object.keys(this).forEach(key => {
+      if (key !== 'originalAttributes' && typeof this[key] !== 'function') {
+        (this as any).originalAttributes[key] = (this as any)[key];
+      }
+    });
+
     return this;
   }
 
@@ -598,6 +608,14 @@ export abstract class Model {
 
     // Update instance attributes
     Object.assign(this, updateAttributes);
+
+    // Update original attributes after update
+    (this as any).originalAttributes = {};
+    Object.keys(this).forEach(key => {
+      if (key !== 'originalAttributes' && typeof this[key] !== 'function') {
+        (this as any).originalAttributes[key] = (this as any)[key];
+      }
+    });
 
     // Execute afterUpdate hooks
     await hookManager.execute(HookEvent.AFTER_UPDATE, this);
@@ -779,6 +797,277 @@ export abstract class Model {
    */
   private static resetSoftDeleteModifiers(ModelClass: typeof Model): void {
     Model.softDeleteState.delete(ModelClass);
+  }
+
+  /**
+   * Count records matching conditions
+   */
+  static async count<T extends Model>(
+    this: (new () => T) & { tableName: string },
+    conditions?: Record<string, any>
+  ): Promise<number> {
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
+
+    // Apply global scopes
+    const ModelClass = this as unknown as typeof Model;
+    const globalScopesMap = (Model as any).globalScopes;
+    if (globalScopesMap) {
+      const globalScopes = globalScopesMap.get(ModelClass);
+      if (globalScopes) {
+        for (const scope of globalScopes) {
+          scope(query);
+        }
+      }
+    }
+
+    // Apply where conditions
+    if (conditions) {
+      for (const [field, value] of Object.entries(conditions)) {
+        query.where(field, '=', value);
+      }
+    }
+
+    if (isMongoDB) {
+      const result = await query.execute();
+      return result.rowCount || 0;
+    } else {
+      (query as QueryBuilder).count();
+      const result = await query.execute();
+      return parseInt(result.rows[0]?.count || '0', 10);
+    }
+  }
+
+  /**
+   * Check if records exist matching conditions
+   */
+  static async exists<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    conditions?: Record<string, any>
+  ): Promise<boolean> {
+    const count = await (this as any).count(conditions);
+    return count > 0;
+  }
+
+  /**
+   * Pluck a single column's value from the first N results
+   */
+  static async pluck<T extends Model>(
+    this: (new () => T) & { tableName: string },
+    column: string,
+    options?: QueryOptions
+  ): Promise<any[]> {
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
+
+    // Apply global scopes
+    const ModelClass = this as unknown as typeof Model;
+    const globalScopesMap = (Model as any).globalScopes;
+    if (globalScopesMap) {
+      const globalScopes = globalScopesMap.get(ModelClass);
+      if (globalScopes) {
+        for (const scope of globalScopes) {
+          scope(query);
+        }
+      }
+    }
+
+    // Apply where conditions
+    if (options?.where) {
+      for (const [field, value] of Object.entries(options.where)) {
+        query.where(field, '=', value);
+      }
+    }
+
+    // Apply order by
+    if (options?.orderBy) {
+      if (typeof options.orderBy === 'string') {
+        const parts = options.orderBy.trim().split(/\s+/);
+        const col = parts[0];
+        const direction = parts[1]?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        query.orderBy(col, direction);
+      }
+    }
+
+    // Apply limit
+    if (options?.limit) {
+      query.limit(options.limit);
+    }
+
+    if (isMongoDB) {
+      const result = await query.execute();
+      return result.rows.map(row => row[column]);
+    } else {
+      (query as QueryBuilder).select([column]);
+      const result = await query.execute();
+      return result.rows.map(row => row[column]);
+    }
+  }
+
+  /**
+   * Get the first record
+   */
+  static async first<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    options?: QueryOptions & { include?: string[] }
+  ): Promise<T | null> {
+    const results = await (this as any).findAll({ ...options, limit: 1 });
+    return results.length > 0 ? results[0] : null;
+  }
+
+  /**
+   * Get the last record
+   */
+  static async last<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string },
+    options?: QueryOptions & { include?: string[] }
+  ): Promise<T | null> {
+    const orderBy = options?.orderBy || 'id DESC';
+    const results = await (this as any).findAll({ ...options, orderBy, limit: 1 });
+    return results.length > 0 ? results[0] : null;
+  }
+
+  /**
+   * Increment a column's value
+   */
+  async increment(column: string, amount: number = 1): Promise<this> {
+    if (!this.id) {
+      throw new Error('Cannot increment a model instance without an id.');
+    }
+
+    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+
+    if (isMongoDB) {
+      const query = new MongoDBQueryBuilder(ModelClass.tableName, connection);
+      query.update({ $inc: { [column]: amount } });
+      query.where('id', '=', this.id);
+      await query.execute();
+    } else {
+      // Use raw SQL for increment
+      const sql = `UPDATE ${ModelClass.tableName} SET ${column} = ${column} + ? WHERE id = ?`;
+      await connection.query(sql, [amount, this.id]);
+    }
+
+    // Update instance
+    (this as any)[column] = ((this as any)[column] || 0) + amount;
+    (this as any).originalAttributes[column] = (this as any)[column];
+
+    return this;
+  }
+
+  /**
+   * Decrement a column's value
+   */
+  async decrement(column: string, amount: number = 1): Promise<this> {
+    return this.increment(column, -amount);
+  }
+
+  /**
+   * Touch the updated_at timestamp
+   */
+  async touch(column?: string): Promise<this> {
+    if (!this.id) {
+      throw new Error('Cannot touch a model instance without an id.');
+    }
+
+    const ModelClass = this.constructor as typeof Model & { 
+      tableName: string;
+      timestamps?: boolean;
+      updatedAt?: string;
+    };
+
+    const updatedAtField = column || ModelClass.updatedAt || 'updated_at';
+    const now = new Date();
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    if (isMongoDB) {
+      (query as MongoDBQueryBuilder).update({ [updatedAtField]: now });
+      (query as MongoDBQueryBuilder).where('id', '=', this.id);
+    } else {
+      (query as QueryBuilder).update({ [updatedAtField]: now });
+      (query as QueryBuilder).where('id', '=', this.id);
+    }
+
+    await query.execute();
+
+    // Update instance
+    (this as any)[updatedAtField] = now;
+    (this as any).originalAttributes[updatedAtField] = now;
+
+    return this;
+  }
+
+  /**
+   * Reload the model from the database
+   */
+  async fresh(): Promise<this> {
+    if (!this.id) {
+      throw new Error('Cannot reload a model instance without an id.');
+    }
+
+    const ModelClass = this.constructor as typeof Model & { tableName: string };
+    const freshInstance = await (ModelClass as any).findById(this.id);
+
+    if (!freshInstance) {
+      throw new Error('Model instance no longer exists in the database.');
+    }
+
+    // Copy all attributes from fresh instance
+    Object.keys(freshInstance).forEach(key => {
+      if (key !== 'originalAttributes') {
+        (this as any)[key] = (freshInstance as any)[key];
+      }
+    });
+
+    // Update original attributes
+    (this as any).originalAttributes = {};
+    Object.keys(freshInstance).forEach(key => {
+      if (key !== 'originalAttributes') {
+        (this as any).originalAttributes[key] = (freshInstance as any)[key];
+      }
+    });
+
+    return this;
+  }
+
+  /**
+   * Check if the model has been modified
+   */
+  isDirty(attribute?: string): boolean {
+    if (attribute) {
+      return (this as any)[attribute] !== (this as any).originalAttributes[attribute];
+    }
+
+    // Check all attributes
+    for (const key in this) {
+      if (this.hasOwnProperty(key) && typeof this[key] !== 'function' && key !== 'originalAttributes') {
+        if ((this as any)[key] !== (this as any).originalAttributes[key]) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if the model is clean (not modified)
+   */
+  isClean(attribute?: string): boolean {
+    return !this.isDirty(attribute);
   }
 }
 
