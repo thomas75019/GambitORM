@@ -20,6 +20,9 @@ export abstract class Model {
   static timestamps: boolean = false;
   static createdAt: string = 'created_at';
   static updatedAt: string = 'updated_at';
+  static softDeletes: boolean = false;
+  static deletedAt: string = 'deleted_at';
+  private static softDeleteState: Map<typeof Model, { includeTrashed: boolean; onlyTrashed: boolean }> = new Map();
   
   [key: string]: any;
 
@@ -150,7 +153,7 @@ export abstract class Model {
    * Find all records with optional eager loading
    */
   static async findAll<T extends Model>(
-    this: (new () => T) & { tableName: string },
+    this: (new () => T) & { tableName: string; softDeletes?: boolean; deletedAt?: string },
     options?: QueryOptions & { include?: string[] }
   ): Promise<T[]> {
     const connection = Model.getConnection();
@@ -158,6 +161,20 @@ export abstract class Model {
     const query = isMongoDB
       ? new MongoDBQueryBuilder(this.tableName, connection)
       : new QueryBuilder(this.tableName, connection);
+
+    // Apply soft delete filtering if enabled
+    const ModelClass = this as unknown as typeof Model;
+    const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
+    const deletedAt = (ModelClass as any).deletedAt as string | undefined;
+    if (softDeletes && !state.includeTrashed) {
+      const deletedAtField = deletedAt || 'deleted_at';
+      if (state.onlyTrashed) {
+        query.where(deletedAtField, '!=', null);
+      } else {
+        query.whereNull(deletedAtField);
+      }
+    }
 
     // Apply where conditions
     if (options?.where) {
@@ -192,6 +209,10 @@ export abstract class Model {
     const result = await query.execute();
     const instances = result.rows.map(row => Model.hydrate(this, row)) as T[];
 
+    // Reset soft delete modifiers after query
+    const ModelClassForAll = this as unknown as typeof Model;
+    Model.resetSoftDeleteModifiers(ModelClassForAll);
+
     // Eager load relationships if specified
     if (options?.include && options.include.length > 0) {
       await Model.eagerLoadRelations(instances, options.include);
@@ -204,7 +225,7 @@ export abstract class Model {
    * Find a single record by ID with optional eager loading
    */
   static async findById<T extends Model>(
-    this: (new () => T) & { tableName: string },
+    this: (new () => T) & { tableName: string; softDeletes?: boolean; deletedAt?: string },
     id: number | string,
     options?: { include?: string[] }
   ): Promise<T | null> {
@@ -215,12 +236,31 @@ export abstract class Model {
       : new QueryBuilder(this.tableName, connection);
     query.where('id', '=', id);
 
+    // Apply soft delete filtering if enabled
+    const ModelClassForId = this as unknown as typeof Model;
+    const stateForId = Model.softDeleteState.get(ModelClassForId) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletesForId = (ModelClassForId as any).softDeletes as boolean | undefined;
+    const deletedAtForId = (ModelClassForId as any).deletedAt as string | undefined;
+    if (softDeletesForId && !stateForId.includeTrashed) {
+      const deletedAtField = deletedAtForId || 'deleted_at';
+      if (stateForId.onlyTrashed) {
+        query.where(deletedAtField, '!=', null);
+      } else {
+        query.whereNull(deletedAtField);
+      }
+    }
+
     const result = await query.execute();
     if (result.rows.length === 0) {
+      // Reset soft delete modifiers after query
+      Model.resetSoftDeleteModifiers(ModelClassForId);
       return null;
     }
 
     const instance = Model.hydrate(this, result.rows[0]) as T;
+
+    // Reset soft delete modifiers after query
+    Model.resetSoftDeleteModifiers(ModelClassForId);
 
     // Eager load relationships if specified
     if (options?.include && options.include.length > 0) {
@@ -234,7 +274,7 @@ export abstract class Model {
    * Find a single record by conditions with optional eager loading
    */
   static async findOne<T extends Model>(
-    this: (new () => T) & { tableName: string },
+    this: (new () => T) & { tableName: string; softDeletes?: boolean; deletedAt?: string },
     conditions: Record<string, any>,
     options?: { include?: string[] }
   ): Promise<T | null> {
@@ -248,14 +288,33 @@ export abstract class Model {
       query.where(field, '=', value);
     }
 
+    // Apply soft delete filtering if enabled
+    const ModelClass = this as unknown as typeof Model;
+    const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
+    const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
+    const deletedAt = (ModelClass as any).deletedAt as string | undefined;
+    if (softDeletes && !state.includeTrashed) {
+      const deletedAtField = deletedAt || 'deleted_at';
+      if (state.onlyTrashed) {
+        query.where(deletedAtField, '!=', null);
+      } else {
+        query.whereNull(deletedAtField);
+      }
+    }
+
     query.limit(1);
     const result = await query.execute();
 
     if (result.rows.length === 0) {
+      // Reset soft delete modifiers after query
+      Model.resetSoftDeleteModifiers(ModelClass);
       return null;
     }
 
     const instance = Model.hydrate(this, result.rows[0]) as T;
+
+    // Reset soft delete modifiers after query
+    Model.resetSoftDeleteModifiers(ModelClass);
 
     // Eager load relationships if specified
     if (options?.include && options.include.length > 0) {
@@ -547,9 +606,74 @@ export abstract class Model {
   }
 
   /**
-   * Delete the current instance
+   * Delete the current instance (soft delete if enabled, otherwise hard delete)
    */
   async delete(): Promise<boolean> {
+    if (!this.id) {
+      throw new Error('Cannot delete a model instance without an id.');
+    }
+
+    const ModelClass = this.constructor as typeof Model & { 
+      tableName: string; 
+      softDeletes?: boolean; 
+      deletedAt?: string;
+    };
+    const hookManager = Model.getHookManager(ModelClass);
+
+    // Execute beforeDelete hooks
+    await hookManager.execute(HookEvent.BEFORE_DELETE, this);
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    // If soft deletes are enabled, update deleted_at instead of deleting
+    if (ModelClass.softDeletes) {
+      const deletedAtField = ModelClass.deletedAt || 'deleted_at';
+      const deletedAtValue = new Date();
+      
+      query.update({ [deletedAtField]: deletedAtValue });
+      query.where('id', '=', this.id);
+      
+      const result = await query.execute();
+      
+      if (result.rowCount && result.rowCount > 0) {
+        // Update instance
+        (this as any)[deletedAtField] = deletedAtValue;
+        
+        // Execute afterDelete hooks
+        await hookManager.execute(HookEvent.AFTER_DELETE, this);
+        
+        return true;
+      }
+      
+      return false;
+    } else {
+      // Hard delete
+      query.delete();
+      query.where('id', '=', this.id);
+
+      const result = await query.execute();
+
+      if (result.rowCount && result.rowCount > 0) {
+        // Execute afterDelete hooks
+        await hookManager.execute(HookEvent.AFTER_DELETE, this);
+        
+        // Clear the id to mark as deleted
+        this.id = undefined;
+        return true;
+      }
+
+      return false;
+    }
+  }
+
+  /**
+   * Permanently delete the current instance (force delete)
+   */
+  async forceDelete(): Promise<boolean> {
     if (!this.id) {
       throw new Error('Cannot delete a model instance without an id.');
     }
@@ -561,7 +685,10 @@ export abstract class Model {
     await hookManager.execute(HookEvent.BEFORE_DELETE, this);
 
     const connection = Model.getConnection();
-    const query = new QueryBuilder(ModelClass.tableName, connection);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
 
     query.delete();
     query.where('id', '=', this.id);
@@ -578,6 +705,80 @@ export abstract class Model {
     }
 
     return false;
+  }
+
+  /**
+   * Restore a soft-deleted instance
+   */
+  async restore(): Promise<boolean> {
+    if (!this.id) {
+      throw new Error('Cannot restore a model instance without an id.');
+    }
+
+    const ModelClass = this.constructor as typeof Model & { 
+      tableName: string; 
+      softDeletes?: boolean; 
+      deletedAt?: string;
+    };
+
+    if (!ModelClass.softDeletes) {
+      throw new Error('Cannot restore a model that does not use soft deletes.');
+    }
+
+    const deletedAtField = ModelClass.deletedAt || 'deleted_at';
+    const deletedAtValue = (this as any)[deletedAtField];
+
+    if (!deletedAtValue) {
+      return false; // Not soft-deleted
+    }
+
+    const connection = Model.getConnection();
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
+
+    query.update({ [deletedAtField]: null });
+    query.where('id', '=', this.id);
+
+    const result = await query.execute();
+
+    if (result.rowCount && result.rowCount > 0) {
+      // Update instance
+      (this as any)[deletedAtField] = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Include soft-deleted records in the next query
+   */
+  static withTrashed<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string; softDeletes?: boolean }
+  ): (new () => T) & typeof Model & { tableName: string; softDeletes?: boolean; deletedAt?: string } {
+    const ModelClass = this as typeof Model;
+    Model.softDeleteState.set(ModelClass, { includeTrashed: true, onlyTrashed: false });
+    return this;
+  }
+
+  /**
+   * Only retrieve soft-deleted records in the next query
+   */
+  static onlyTrashed<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string; softDeletes?: boolean }
+  ): (new () => T) & typeof Model & { tableName: string; softDeletes?: boolean; deletedAt?: string } {
+    const ModelClass = this as typeof Model;
+    Model.softDeleteState.set(ModelClass, { includeTrashed: false, onlyTrashed: true });
+    return this;
+  }
+
+  /**
+   * Reset soft delete query modifiers
+   */
+  private static resetSoftDeleteModifiers(ModelClass: typeof Model): void {
+    Model.softDeleteState.delete(ModelClass);
   }
 }
 
