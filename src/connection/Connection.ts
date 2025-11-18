@@ -3,6 +3,7 @@ import { BaseAdapter } from './adapters/BaseAdapter';
 import { MySQLAdapter } from './adapters/MySQLAdapter';
 import { PostgreSQLAdapter } from './adapters/PostgreSQLAdapter';
 import { SQLiteAdapter } from './adapters/SQLiteAdapter';
+import { MongoDBAdapter } from './adapters/MongoDBAdapter';
 
 /**
  * Database connection manager
@@ -29,6 +30,8 @@ export class Connection {
         return new PostgreSQLAdapter(this.config);
       case 'sqlite':
         return new SQLiteAdapter(this.config);
+      case 'mongodb':
+        return new MongoDBAdapter(this.config);
       default:
         throw new Error(`Unsupported database dialect: ${dialect}`);
     }
@@ -92,6 +95,18 @@ export class Connection {
    */
   getDialect(): string {
     return this.config.dialect || 'mysql';
+  }
+
+  /**
+   * Get MongoDB helper for native MongoDB operations
+   * Only available when using MongoDB adapter
+   */
+  getMongoDBHelper(): any {
+    if (this.config.dialect !== 'mongodb') {
+      throw new Error('MongoDB helper is only available for MongoDB connections');
+    }
+    const { MongoDBHelper } = require('./adapters/MongoDBHelper');
+    return new MongoDBHelper(this.adapter as any);
   }
 
   /**

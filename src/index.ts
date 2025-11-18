@@ -2,7 +2,9 @@
 export { GambitORM } from './orm/GambitORM';
 export { Model } from './orm/Model';
 export { QueryBuilder } from './query/QueryBuilder';
+export { MongoDBQueryBuilder } from './query/MongoDBQueryBuilder';
 export { Connection } from './connection/Connection';
+export { MongoDBHelper } from './connection/adapters/MongoDBHelper';
 export { Migration } from './migration/Migration';
 export { MigrationRunner } from './migration/MigrationRunner';
 export { SchemaBuilder } from './migration/SchemaBuilder';

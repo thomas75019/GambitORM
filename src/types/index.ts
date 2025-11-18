@@ -8,7 +8,7 @@ export interface DatabaseConfig {
   database: string;
   user?: string;
   password?: string;
-  dialect?: 'mysql' | 'postgres' | 'sqlite';
+  dialect?: 'mysql' | 'postgres' | 'sqlite' | 'mongodb';
   pool?: {
     min?: number;
     max?: number;

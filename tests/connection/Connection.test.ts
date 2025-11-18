@@ -9,6 +9,7 @@ import { SQLiteAdapter } from '../../src/connection/adapters/SQLiteAdapter';
 jest.mock('../../src/connection/adapters/MySQLAdapter');
 jest.mock('../../src/connection/adapters/PostgreSQLAdapter');
 jest.mock('../../src/connection/adapters/SQLiteAdapter');
+jest.mock('../../src/connection/adapters/MongoDBAdapter');
 
 describe('Connection', () => {
   const mysqlConfig: DatabaseConfig = {
@@ -34,6 +35,13 @@ describe('Connection', () => {
     dialect: 'sqlite',
   };
 
+  const mongodbConfig: DatabaseConfig = {
+    host: 'localhost',
+    port: 27017,
+    database: 'testdb',
+    dialect: 'mongodb',
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -52,6 +60,12 @@ describe('Connection', () => {
     it('should create SQLite adapter when dialect is sqlite', () => {
       new Connection(sqliteConfig);
       expect(SQLiteAdapter).toHaveBeenCalledWith(sqliteConfig);
+    });
+
+    it('should create MongoDB adapter when dialect is mongodb', () => {
+      const { MongoDBAdapter } = require('../../src/connection/adapters/MongoDBAdapter');
+      new Connection(mongodbConfig);
+      expect(MongoDBAdapter).toHaveBeenCalledWith(mongodbConfig);
     });
 
     it('should default to MySQL when dialect is not specified', () => {
