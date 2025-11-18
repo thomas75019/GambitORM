@@ -21,8 +21,15 @@ export class MockAdapter implements BaseAdapter {
 
   async query(sql: string, params?: any[]): Promise<QueryResult> {
     this.queries.push({ sql, params });
-    const result = this.queryResults.shift() || { rows: [], rowCount: 0 };
-    return Promise.resolve(result);
+    
+    // If we have queued results, use them in order
+    if (this.queryResults.length > 0) {
+      const result = this.queryResults.shift()!;
+      return Promise.resolve(result);
+    }
+    
+    // Default empty result
+    return Promise.resolve({ rows: [], rowCount: 0 });
   }
 
   isConnected(): boolean {
