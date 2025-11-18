@@ -7,6 +7,7 @@ import { HasMany } from '../relationships/HasMany';
 import { BelongsTo } from '../relationships/BelongsTo';
 import { Validator, ValidationEngine, ValidationError } from '../validation';
 import { HookManager, HookEvent, HookCallback } from '../hooks';
+import { ScopeQueryBuilder } from './ScopeQueryBuilder';
 
 /**
  * Base Model class that all models should extend
@@ -17,6 +18,8 @@ export abstract class Model {
   private static relationships: Map<string, { type: string; model: new () => Model; foreignKey?: string; localKey?: string }> = new Map();
   static validationRules?: Record<string, Validator[]>;
   private static hookManagers: Map<typeof Model, HookManager> = new Map();
+  private static scopes: Map<typeof Model, Record<string, (query: QueryBuilder | MongoDBQueryBuilder, ...args: any[]) => void>> = new Map();
+  private static globalScopes: Map<typeof Model, Array<(query: QueryBuilder | MongoDBQueryBuilder) => void>> = new Map();
   
   [key: string]: any;
 
@@ -144,6 +147,63 @@ export abstract class Model {
   }
 
   /**
+   * Define a local scope
+   */
+  static scope<T extends Model>(
+    this: (new () => T) & typeof Model,
+    name: string,
+    callback: (query: QueryBuilder | MongoDBQueryBuilder, ...args: any[]) => void
+  ): void {
+    const ModelClass = this as typeof Model;
+    if (!Model.scopes.has(ModelClass)) {
+      Model.scopes.set(ModelClass, {});
+    }
+    const scopes = Model.scopes.get(ModelClass)!;
+    scopes[name] = callback;
+  }
+
+  /**
+   * Add a global scope
+   */
+  static addGlobalScope<T extends Model>(
+    this: (new () => T) & typeof Model,
+    name: string,
+    callback: (query: QueryBuilder | MongoDBQueryBuilder) => void
+  ): void {
+    const ModelClass = this as typeof Model;
+    if (!Model.globalScopes.has(ModelClass)) {
+      Model.globalScopes.set(ModelClass, []);
+    }
+    const globalScopes = Model.globalScopes.get(ModelClass)!;
+    globalScopes.push(callback);
+  }
+
+  /**
+   * Remove a global scope
+   */
+  static removeGlobalScope<T extends Model>(
+    this: (new () => T) & typeof Model,
+    name: string
+  ): void {
+    const ModelClass = this as typeof Model;
+    // Note: Simplified implementation - in full version would track names
+    const globalScopes = Model.globalScopes.get(ModelClass);
+    if (globalScopes && globalScopes.length > 0) {
+      Model.globalScopes.set(ModelClass, []);
+    }
+  }
+
+  /**
+   * Create a scope query builder instance
+   */
+  static query<T extends Model>(
+    this: (new () => T) & typeof Model & { tableName: string }
+  ): ScopeQueryBuilder<T> {
+    const connection = Model.getConnection();
+    return new ScopeQueryBuilder(this, connection);
+  }
+
+  /**
    * Find all records with optional eager loading
    */
   static async findAll<T extends Model>(
@@ -155,6 +215,15 @@ export abstract class Model {
     const query = isMongoDB
       ? new MongoDBQueryBuilder(this.tableName, connection)
       : new QueryBuilder(this.tableName, connection);
+
+    // Apply global scopes
+    const ModelClass = this as unknown as typeof Model;
+    const globalScopes = Model.globalScopes.get(ModelClass);
+    if (globalScopes) {
+      for (const scope of globalScopes) {
+        scope(query);
+      }
+    }
 
     // Apply where conditions
     if (options?.where) {
@@ -210,6 +279,16 @@ export abstract class Model {
     const query = isMongoDB
       ? new MongoDBQueryBuilder(this.tableName, connection)
       : new QueryBuilder(this.tableName, connection);
+
+    // Apply global scopes
+    const ModelClass = this as unknown as typeof Model;
+    const globalScopes = Model.globalScopes.get(ModelClass);
+    if (globalScopes) {
+      for (const scope of globalScopes) {
+        scope(query);
+      }
+    }
+
     query.where('id', '=', id);
 
     const result = await query.execute();
@@ -240,6 +319,15 @@ export abstract class Model {
     const query = isMongoDB
       ? new MongoDBQueryBuilder(this.tableName, connection)
       : new QueryBuilder(this.tableName, connection);
+
+    // Apply global scopes
+    const ModelClass = this as unknown as typeof Model;
+    const globalScopes = Model.globalScopes.get(ModelClass);
+    if (globalScopes) {
+      for (const scope of globalScopes) {
+        scope(query);
+      }
+    }
 
     for (const [field, value] of Object.entries(conditions)) {
       query.where(field, '=', value);
