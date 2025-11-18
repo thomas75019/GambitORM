@@ -503,6 +503,102 @@ const result = await QueryBuilder.raw(
 
 ---
 
+## MongoDB Usage
+
+### Basic Setup
+
+```typescript
+import { GambitORM, Model, MongoDBHelper } from 'gambitorm';
+
+// Initialize with MongoDB
+const orm = new GambitORM({
+  host: 'localhost',
+  port: 27017,
+  database: 'mydb',
+  dialect: 'mongodb',
+});
+
+await orm.connect();
+Model.setConnection(orm.getConnection());
+
+// Define model (same as SQL databases)
+class User extends Model {
+  static tableName = 'users';
+  id!: string; // MongoDB uses ObjectId, converted to string
+  name!: string;
+  email!: string;
+}
+```
+
+### Using Model API
+
+```typescript
+// Model API works the same (automatically uses MongoDB)
+const user = await User.create({ name: 'John', email: 'john@example.com' });
+const users = await User.findAll({ where: { status: 'active' } });
+const found = await User.findById(user.id);
+await found?.update({ name: 'Jane' });
+await found?.delete();
+```
+
+### Native MongoDB Operations
+
+```typescript
+// Get MongoDB helper
+const connection = orm.getConnection();
+const mongoHelper = connection.getMongoDBHelper();
+
+// Find with MongoDB query syntax
+const users = await mongoHelper.find('users', {
+  age: { $gte: 18 },
+  status: 'active'
+});
+
+// Complex queries
+const activeUsers = await mongoHelper.find('users', {
+  $and: [
+    { age: { $gte: 18 } },
+    { status: 'active' }
+  ]
+}, {
+  sort: { name: 1 },
+  limit: 10
+});
+
+// Update with MongoDB operators
+await mongoHelper.updateMany('users', 
+  { status: 'inactive' },
+  { $set: { lastLogin: new Date() } }
+);
+
+// Aggregation (using native collection)
+const collection = mongoHelper.collection('users');
+const pipeline = [
+  { $match: { status: 'active' } },
+  { $group: { _id: '$role', count: { $sum: 1 } } }
+];
+const result = await collection?.aggregate(pipeline).toArray();
+```
+
+### MongoDB Transactions
+
+```typescript
+// Transactions work the same way
+await orm.transaction(async (tx) => {
+  await User.create({ name: 'John', email: 'john@example.com' });
+  await User.create({ name: 'Jane', email: 'jane@example.com' });
+  // Automatically commits or rolls back
+});
+```
+
+### MongoDB vs SQL Differences
+
+1. **Collections vs Tables**: MongoDB uses collections (same as tableName in models)
+2. **Documents vs Rows**: MongoDB stores documents (JSON objects)
+3. **No Schema**: MongoDB is schema-less (but validation still works)
+4. **ObjectId**: MongoDB uses `_id` (automatically converted to `id` in models)
+5. **Query Syntax**: Use MongoDB query operators (`$gte`, `$in`, etc.) with MongoDBHelper
+
 ## Best Practices
 
 1. **Always use transactions for multiple related operations**
@@ -511,6 +607,8 @@ const result = await QueryBuilder.raw(
 4. **Use parameterized queries (automatic with QueryBuilder)**
 5. **Handle errors appropriately**
 6. **Close connections when done**
-7. **Use migrations for schema changes**
+7. **Use migrations for schema changes** (SQL databases only)
 8. **Define relationships explicitly**
+9. **For MongoDB, use MongoDBHelper for complex queries**
+10. **Use native MongoDB operations for aggregation pipelines**
 

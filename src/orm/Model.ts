@@ -1,5 +1,6 @@
 import { ModelAttributes, ModelInstance, QueryOptions, RelationshipOptions } from '../types';
 import { QueryBuilder } from '../query/QueryBuilder';
+import { MongoDBQueryBuilder } from '../query/MongoDBQueryBuilder';
 import { Connection } from '../connection/Connection';
 import { HasOne } from '../relationships/HasOne';
 import { HasMany } from '../relationships/HasMany';
@@ -150,7 +151,10 @@ export abstract class Model {
     options?: QueryOptions & { include?: string[] }
   ): Promise<T[]> {
     const connection = Model.getConnection();
-    const query = new QueryBuilder(this.tableName, connection);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
 
     // Apply where conditions
     if (options?.where) {
@@ -202,7 +206,10 @@ export abstract class Model {
     options?: { include?: string[] }
   ): Promise<T | null> {
     const connection = Model.getConnection();
-    const query = new QueryBuilder(this.tableName, connection);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
     query.where('id', '=', id);
 
     const result = await query.execute();
@@ -229,7 +236,10 @@ export abstract class Model {
     options?: { include?: string[] }
   ): Promise<T | null> {
     const connection = Model.getConnection();
-    const query = new QueryBuilder(this.tableName, connection);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(this.tableName, connection)
+      : new QueryBuilder(this.tableName, connection);
 
     for (const [field, value] of Object.entries(conditions)) {
       query.where(field, '=', value);
@@ -368,7 +378,10 @@ export abstract class Model {
     }
 
     const connection = Model.getConnection();
-    const query = new QueryBuilder(ModelClass.tableName, connection);
+    const isMongoDB = connection.getDialect() === 'mongodb';
+    const query = isMongoDB
+      ? new MongoDBQueryBuilder(ModelClass.tableName, connection)
+      : new QueryBuilder(ModelClass.tableName, connection);
 
     // Get all attributes except methods
     const attributes: ModelAttributes = {};
@@ -380,8 +393,13 @@ export abstract class Model {
 
     if (this.id) {
       // Update existing record
-      query.update(attributes);
-      query.where('id', '=', this.id);
+      if (isMongoDB) {
+        (query as MongoDBQueryBuilder).update(attributes);
+        (query as MongoDBQueryBuilder).where('id', '=', this.id);
+      } else {
+        (query as QueryBuilder).update(attributes);
+        (query as QueryBuilder).where('id', '=', this.id);
+      }
       await query.execute();
       
       // Execute afterUpdate hooks

@@ -24,6 +24,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🎣 Lifecycle hooks (beforeSave, afterSave, beforeDelete, etc.)
 - 🛠️ CLI tool for migration management
 - 🔍 Advanced query methods (whereIn, whereNull, whereBetween, subqueries, raw SQL)
+- 🍃 MongoDB support with native operations
 
 ## Installation
 
@@ -31,10 +32,9 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 npm install gambitorm
 ```
 
-### Optional: SQLite Support
+### Optional Database Drivers
 
-For SQLite support, you need to install `better-sqlite3` separately:
-
+**SQLite Support:**
 ```bash
 npm install better-sqlite3
 ```
@@ -43,7 +43,10 @@ npm install better-sqlite3
 - Visual Studio Build Tools with "Desktop development with C++" workload
 - Windows SDK
 
-If you don't need SQLite support, you can skip this step. MySQL and PostgreSQL will work without it.
+**MongoDB Support:**
+MongoDB support is included by default. The `mongodb` package is already in dependencies.
+
+If you don't need SQLite support, you can skip it. MySQL, PostgreSQL, and MongoDB will work without it.
 
 ## Quick Start
 

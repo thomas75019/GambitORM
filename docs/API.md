@@ -323,7 +323,97 @@ Defines a belongsTo relationship.
 
 ## QueryBuilder
 
-Query builder for constructing SQL queries.
+Query builder for constructing SQL queries (MySQL, PostgreSQL, SQLite).
+
+## MongoDBQueryBuilder
+
+Query builder for constructing MongoDB queries. Automatically used when `dialect: 'mongodb'`.
+
+### Constructor
+
+```typescript
+new MongoDBQueryBuilder(collectionName: string, connection: Connection)
+```
+
+### Methods
+
+Similar to QueryBuilder but uses MongoDB operations:
+- `where(field: string, operator: string, value: any): this` - MongoDB filter
+- `whereIn(field: string, values: any[]): this` - Uses `$in`
+- `whereNotIn(field: string, values: any[]): this` - Uses `$nin`
+- `whereNull(field: string): this` - Null check
+- `whereNotNull(field: string): this` - Not null check
+- `orderBy(field: string, direction?: 'ASC' | 'DESC'): this` - MongoDB sort
+- `limit(count: number): this` - MongoDB limit
+- `offset(count: number): this` - MongoDB skip
+- `insert(data: Record<string, any>): this` - Insert document
+- `update(data: Record<string, any>): this` - Update with `$set`
+- `delete(): this` - Delete documents
+- `execute(): Promise<QueryResult>` - Execute MongoDB operation
+
+## MongoDBAdapter
+
+MongoDB database adapter using native MongoDB operations.
+
+### Methods
+
+#### `getDatabase(): Db | undefined`
+
+Gets the MongoDB database instance.
+
+#### `getCollection(name: string): Collection | undefined`
+
+Gets a MongoDB collection.
+
+#### `getSession(): ClientSession | undefined`
+
+Gets the current transaction session.
+
+## MongoDBHelper
+
+Helper class for native MongoDB operations.
+
+### Methods
+
+#### `collection(name: string): Collection | undefined`
+
+Gets a collection for direct MongoDB operations.
+
+#### `find<T>(collection: string, filter?: Filter<T>, options?: FindOptions): Promise<T[]>`
+
+Finds documents.
+
+#### `findOne<T>(collection: string, filter?: Filter<T>, options?: FindOptions): Promise<T | null>`
+
+Finds one document.
+
+#### `insertOne<T>(collection: string, document: T): Promise<{ insertedId: string }>`
+
+Inserts one document.
+
+#### `insertMany<T>(collection: string, documents: T[]): Promise<{ insertedIds: string[]; insertedCount: number }>`
+
+Inserts many documents.
+
+#### `updateOne<T>(collection: string, filter: Filter<T>, update: UpdateFilter<T>): Promise<{ modifiedCount: number }>`
+
+Updates one document.
+
+#### `updateMany<T>(collection: string, filter: Filter<T>, update: UpdateFilter<T>): Promise<{ modifiedCount: number }>`
+
+Updates many documents.
+
+#### `deleteOne<T>(collection: string, filter: Filter<T>): Promise<{ deletedCount: number }>`
+
+Deletes one document.
+
+#### `deleteMany<T>(collection: string, filter: Filter<T>): Promise<{ deletedCount: number }>`
+
+Deletes many documents.
+
+#### `count<T>(collection: string, filter?: Filter<T>): Promise<number>`
+
+Counts documents.
 
 ### Constructor
 
@@ -721,7 +811,7 @@ interface DatabaseConfig {
   database: string;
   user?: string;
   password?: string;
-  dialect?: 'mysql' | 'postgres' | 'sqlite';
+  dialect?: 'mysql' | 'postgres' | 'sqlite' | 'mongodb';
   pool?: {
     min?: number;
     max?: number;
