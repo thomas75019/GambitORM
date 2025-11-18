@@ -363,7 +363,6 @@ export abstract class Model {
     }
 
     // Apply soft delete filtering if enabled
-    const ModelClass = this as unknown as typeof Model;
     const state = Model.softDeleteState.get(ModelClass) || { includeTrashed: false, onlyTrashed: false };
     const softDeletes = (ModelClass as any).softDeletes as boolean | undefined;
     const deletedAt = (ModelClass as any).deletedAt as string | undefined;
