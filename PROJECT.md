@@ -92,6 +92,8 @@ GambitORM aims to provide:
 
 ## Roadmap
 
+See [IMPROVEMENTS.md](./docs/IMPROVEMENTS.md) for detailed improvement roadmap.
+
 ### Short Term
 - [ ] Performance optimizations
 - [ ] Additional database adapters
