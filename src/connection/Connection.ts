@@ -93,5 +93,54 @@ export class Connection {
   getDialect(): string {
     return this.config.dialect || 'mysql';
   }
+
+  /**
+   * Begin a transaction
+   */
+  async beginTransaction(): Promise<void> {
+    if (!this.adapter) {
+      throw new Error('Database adapter not initialized');
+    }
+
+    if (!this.adapter.isConnected()) {
+      throw new Error('Database connection is not established. Call connect() first.');
+    }
+
+    if (!this.adapter.beginTransaction) {
+      throw new Error('Transactions are not supported by this database adapter');
+    }
+
+    await this.adapter.beginTransaction();
+  }
+
+  /**
+   * Commit a transaction
+   */
+  async commit(): Promise<void> {
+    if (!this.adapter) {
+      throw new Error('Database adapter not initialized');
+    }
+
+    if (!this.adapter.commit) {
+      throw new Error('Transactions are not supported by this database adapter');
+    }
+
+    await this.adapter.commit();
+  }
+
+  /**
+   * Rollback a transaction
+   */
+  async rollback(): Promise<void> {
+    if (!this.adapter) {
+      throw new Error('Database adapter not initialized');
+    }
+
+    if (!this.adapter.rollback) {
+      throw new Error('Transactions are not supported by this database adapter');
+    }
+
+    await this.adapter.rollback();
+  }
 }
 

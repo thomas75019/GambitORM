@@ -8,6 +8,7 @@ export class MockAdapter implements BaseAdapter {
   private connected: boolean = false;
   private queries: Array<{ sql: string; params?: any[] }> = [];
   private queryResults: QueryResult[] = [];
+  private transactionActive: boolean = false;
 
   connect(): Promise<void> {
     this.connected = true;
@@ -51,6 +52,38 @@ export class MockAdapter implements BaseAdapter {
 
   setQueryResults(results: QueryResult[]): void {
     this.queryResults = results;
+  }
+
+  async beginTransaction(): Promise<void> {
+    if (this.transactionActive) {
+      throw new Error('Transaction already active');
+    }
+    this.transactionActive = true;
+    this.queries.push({ sql: 'BEGIN TRANSACTION' });
+  }
+
+  async commit(): Promise<void> {
+    if (!this.transactionActive) {
+      throw new Error('No active transaction');
+    }
+    this.transactionActive = false;
+    this.queries.push({ sql: 'COMMIT' });
+  }
+
+  async rollback(): Promise<void> {
+    if (!this.transactionActive) {
+      throw new Error('No active transaction');
+    }
+    this.transactionActive = false;
+    this.queries.push({ sql: 'ROLLBACK' });
+  }
+
+  getTransactionConnection(): any {
+    return this;
+  }
+
+  isTransactionActive(): boolean {
+    return this.transactionActive;
   }
 }
 

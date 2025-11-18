@@ -13,6 +13,7 @@ A modern, type-safe ORM for Node.js built with TypeScript.
 - 🔗 Relationship support (hasOne, hasMany, belongsTo)
 - ⚡ Eager loading
 - 🔀 Join queries
+- 💼 Transaction support
 
 ## Installation
 
@@ -139,6 +140,51 @@ Load relationships when fetching models:
 // Load users with their profiles (basic support)
 const users = await User.findAll({ include: ['profile'] });
 const user = await User.findById(1, { include: ['profile', 'posts'] });
+```
+
+## Transactions
+
+GambitORM supports database transactions for atomic operations:
+
+### Manual Transaction Management
+
+```typescript
+const transaction = await orm.beginTransaction();
+
+try {
+  await User.create({ name: 'John', email: 'john@example.com' });
+  await Post.create({ title: 'My Post', user_id: 1 });
+  await transaction.commit();
+} catch (error) {
+  await transaction.rollback();
+  throw error;
+}
+```
+
+### Automatic Transaction Management (Recommended)
+
+```typescript
+// Automatically commits on success or rolls back on error
+await orm.transaction(async (tx) => {
+  await User.create({ name: 'John', email: 'john@example.com' });
+  await Post.create({ title: 'My Post', user_id: 1 });
+});
+```
+
+### Using Connection Directly
+
+```typescript
+const connection = orm.getConnection();
+
+await connection.beginTransaction();
+try {
+  await connection.query('UPDATE users SET balance = balance - 100 WHERE id = 1');
+  await connection.query('UPDATE users SET balance = balance + 100 WHERE id = 2');
+  await connection.commit();
+} catch (error) {
+  await connection.rollback();
+  throw error;
+}
 ```
 
 ## Documentation

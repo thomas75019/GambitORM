@@ -6,6 +6,7 @@ export { Connection } from './connection/Connection';
 export { Migration } from './migration/Migration';
 export { MigrationRunner } from './migration/MigrationRunner';
 export { SchemaBuilder } from './migration/SchemaBuilder';
+export { Transaction } from './transaction/Transaction';
 
 // Relationships
 export { HasOne, HasMany, BelongsTo } from './relationships';

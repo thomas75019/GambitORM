@@ -8,6 +8,10 @@ export interface BaseAdapter {
   disconnect(): Promise<void>;
   query(sql: string, params?: any[]): Promise<QueryResult>;
   isConnected(): boolean;
+  beginTransaction?(): Promise<void>;
+  commit?(): Promise<void>;
+  rollback?(): Promise<void>;
+  getTransactionConnection?(): any;
 }
 
 /**

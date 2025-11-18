@@ -8,6 +8,7 @@ import mysql from 'mysql2/promise';
 export class MySQLAdapter extends DatabaseAdapter {
   private pool?: mysql.Pool;
   private connection?: mysql.Connection;
+  private transactionConnection?: mysql.PoolConnection;
 
   async connect(): Promise<void> {
     if (!this.config.host || !this.config.port || !this.config.user || !this.config.password) {
@@ -61,9 +62,11 @@ export class MySQLAdapter extends DatabaseAdapter {
 
     try {
       let result: any;
+      const connection = this.getTransactionConnection();
       
       if (this.pool) {
-        const [rows] = await this.pool.execute(sql, params || []);
+        const conn = connection || this.pool;
+        const [rows] = await (conn as mysql.PoolConnection | mysql.Pool).execute(sql, params || []);
         result = rows;
       } else if (this.connection) {
         const [rows] = await this.connection.execute(sql, params || []);
@@ -83,6 +86,66 @@ export class MySQLAdapter extends DatabaseAdapter {
     } catch (error) {
       throw new Error(`Query execution failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Begin a transaction
+   */
+  async beginTransaction(): Promise<void> {
+    if (!this.connected) {
+      throw new Error('Database connection is not established');
+    }
+
+    if (this.pool) {
+      if (!this.transactionConnection) {
+        this.transactionConnection = await this.pool.getConnection();
+      }
+      await this.transactionConnection.beginTransaction();
+    } else if (this.connection) {
+      await this.connection.beginTransaction();
+    } else {
+      throw new Error('No database connection available');
+    }
+  }
+
+  /**
+   * Commit a transaction
+   */
+  async commit(): Promise<void> {
+    if (this.pool && this.transactionConnection) {
+      await this.transactionConnection.commit();
+      this.transactionConnection.release();
+      this.transactionConnection = undefined;
+    } else if (this.connection) {
+      await this.connection.commit();
+    } else {
+      throw new Error('No active transaction');
+    }
+  }
+
+  /**
+   * Rollback a transaction
+   */
+  async rollback(): Promise<void> {
+    if (this.pool && this.transactionConnection) {
+      await this.transactionConnection.rollback();
+      this.transactionConnection.release();
+      this.transactionConnection = undefined;
+    } else if (this.connection) {
+      await this.connection.rollback();
+    } else {
+      throw new Error('No active transaction');
+    }
+  }
+
+  /**
+   * Get the transaction connection for query execution
+   */
+  getTransactionConnection(): mysql.PoolConnection | mysql.Connection | undefined {
+    if (this.pool && this.transactionConnection) {
+      return this.transactionConnection;
+    }
+    return this.connection;
   }
 }
 

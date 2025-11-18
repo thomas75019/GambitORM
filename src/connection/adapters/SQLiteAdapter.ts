@@ -24,6 +24,7 @@ function loadSQLite(): any {
  */
 export class SQLiteAdapter extends DatabaseAdapter {
   private db?: any;
+  private transactionActive: boolean = false;
 
   async connect(): Promise<void> {
     if (!this.config.database) {
@@ -80,6 +81,61 @@ export class SQLiteAdapter extends DatabaseAdapter {
     } catch (error) {
       throw new Error(`Query execution failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Begin a transaction
+   */
+  async beginTransaction(): Promise<void> {
+    if (!this.connected || !this.db) {
+      throw new Error('Database connection is not established');
+    }
+
+    if (this.transactionActive) {
+      throw new Error('Transaction already active');
+    }
+
+    this.db.exec('BEGIN TRANSACTION');
+    this.transactionActive = true;
+  }
+
+  /**
+   * Commit a transaction
+   */
+  async commit(): Promise<void> {
+    if (!this.transactionActive) {
+      throw new Error('No active transaction');
+    }
+
+    if (!this.db) {
+      throw new Error('Database connection is not established');
+    }
+
+    this.db.exec('COMMIT');
+    this.transactionActive = false;
+  }
+
+  /**
+   * Rollback a transaction
+   */
+  async rollback(): Promise<void> {
+    if (!this.transactionActive) {
+      throw new Error('No active transaction');
+    }
+
+    if (!this.db) {
+      throw new Error('Database connection is not established');
+    }
+
+    this.db.exec('ROLLBACK');
+    this.transactionActive = false;
+  }
+
+  /**
+   * Get the transaction connection (SQLite uses the same connection)
+   */
+  getTransactionConnection(): any {
+    return this.db;
   }
 }
 

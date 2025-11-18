@@ -3,6 +3,7 @@ import { Connection } from '../connection/Connection';
 import { Model } from './Model';
 import { MigrationRunner } from '../migration/MigrationRunner';
 import { Migration } from '../migration/Migration';
+import { Transaction } from '../transaction/Transaction';
 
 /**
  * Main ORM class that manages database connections and models
@@ -89,6 +90,23 @@ export class GambitORM {
   async migrationStatus(migrations: Array<new () => Migration>): Promise<Array<{ name: string; executed: boolean; batch?: number }>> {
     const runner = this.getMigrationRunner();
     return await runner.status(migrations);
+  }
+
+  /**
+   * Begin a transaction
+   */
+  async beginTransaction(): Promise<Transaction> {
+    const transaction = new Transaction(this.connection);
+    await transaction.begin();
+    return transaction;
+  }
+
+  /**
+   * Execute a callback within a transaction
+   * Automatically commits on success or rolls back on error
+   */
+  async transaction<T>(callback: (transaction: Transaction) => Promise<T>): Promise<T> {
+    return await Transaction.run(this.connection, callback);
   }
 }
 
